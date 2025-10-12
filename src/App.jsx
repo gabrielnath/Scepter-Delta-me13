@@ -47,7 +47,7 @@ const PhainonShrine = () => {
     };
   }, []);
 
-  // Draw video frames to canvases
+  // Draw system monitor displays
   const drawVideoFrames = () => {
     if (!playerRef.current || !playerRef.current.getIframe) return;
 
@@ -55,16 +55,38 @@ const PhainonShrine = () => {
       if (canvas) {
         const ctx = canvas.getContext('2d');
         try {
-          // Simple grayscale gradient with subtle animation
-          const gradient = ctx.createLinearGradient(0, 0, canvas.width, canvas.height);
-          const intensity = (Math.sin(Date.now() / 1000 + index * 0.1) + 1) / 2;
-          const gray = Math.floor(intensity * 100 + 50);
-          gradient.addColorStop(0, `rgb(${gray}, ${gray}, ${gray})`);
-          gradient.addColorStop(1, `rgb(${gray - 30}, ${gray - 30}, ${gray - 30})`);
-          ctx.fillStyle = gradient;
+          // Background
+          ctx.fillStyle = '#000000';
           ctx.fillRect(0, 0, canvas.width, canvas.height);
+          
+          // Animated activity bar
+          const activityLevel = (Math.sin(Date.now() / 500 + index * 0.2) + 1) / 2;
+          const barHeight = activityLevel * canvas.height * 0.6;
+          
+          // Green activity indicator
+          const gradient = ctx.createLinearGradient(0, canvas.height, 0, canvas.height - barHeight);
+          gradient.addColorStop(0, 'rgba(34, 197, 94, 0.8)');
+          gradient.addColorStop(1, 'rgba(34, 197, 94, 0.2)');
+          ctx.fillStyle = gradient;
+          ctx.fillRect(0, canvas.height - barHeight, canvas.width, barHeight);
+          
+          // Instance ID
+          ctx.fillStyle = '#22c55e';
+          ctx.font = 'bold 14px monospace';
+          ctx.textAlign = 'center';
+          ctx.textBaseline = 'middle';
+          ctx.fillText(index.toString().padStart(3, '0'), canvas.width / 2, canvas.height / 2);
+          
+          // Status indicator (blinking dot)
+          if (isPlaying && Math.floor(Date.now() / 500) % 2 === 0) {
+            ctx.fillStyle = '#22c55e';
+            ctx.beginPath();
+            ctx.arc(canvas.width - 8, 8, 3, 0, Math.PI * 2);
+            ctx.fill();
+          }
+          
         } catch (e) {
-          ctx.fillStyle = '#444444';
+          ctx.fillStyle = '#000000';
           ctx.fillRect(0, 0, canvas.width, canvas.height);
         }
       }
@@ -206,17 +228,14 @@ const PhainonShrine = () => {
             {Array.from({ length: GRID_SIZE }).map((_, i) => (
               <div
                 key={i}
-                className="aspect-square relative border border-green-400/20 overflow-hidden"
+                className="aspect-square relative border border-green-400/30 overflow-hidden bg-black"
               >
                 <canvas
                   ref={el => canvasRefs.current[i] = el}
-                  width="60"
-                  height="60"
+                  width="80"
+                  height="80"
                   className="w-full h-full"
                 />
-                <div className="absolute top-0 left-0 text-[8px] text-green-400/40 bg-black/80 px-1">
-                  {i.toString().padStart(3, '0')}
-                </div>
               </div>
             ))}
           </div>
