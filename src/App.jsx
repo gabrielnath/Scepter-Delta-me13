@@ -51,25 +51,42 @@ const PhainonShrine = () => {
   // Draw video to all 100 canvases
   const drawVideoFrames = () => {
     const video = videoRef.current;
-    if (!video || video.paused || video.ended || !videoLoaded) {
+    if (!video || !videoLoaded) {
       animationRef.current = requestAnimationFrame(drawVideoFrames);
       return;
     }
 
-    canvasRefs.current.forEach((canvas) => {
+    // Only draw if video is actually playing
+    if (video.paused || video.ended) {
+      animationRef.current = requestAnimationFrame(drawVideoFrames);
+      return;
+    }
+
+    canvasRefs.current.forEach((canvas, index) => {
       if (canvas) {
-        const ctx = canvas.getContext('2d');
+        const ctx = canvas.getContext('2d', { willReadFrequently: false });
         try {
           // Draw video frame to canvas
           ctx.drawImage(video, 0, 0, canvas.width, canvas.height);
           
-          // Add green tint overlay for terminal aesthetic
-          ctx.fillStyle = 'rgba(34, 197, 94, 0.1)';
+          // Add subtle green tint overlay for terminal aesthetic
+          ctx.fillStyle = 'rgba(34, 197, 94, 0.08)';
           ctx.fillRect(0, 0, canvas.width, canvas.height);
+          
+          // Add instance ID overlay
+          ctx.fillStyle = 'rgba(0, 0, 0, 0.7)';
+          ctx.fillRect(0, 0, 30, 12);
+          ctx.fillStyle = '#22c55e';
+          ctx.font = '9px monospace';
+          ctx.fillText(index.toString().padStart(3, '0'), 2, 10);
         } catch (e) {
           // Fallback if drawing fails
-          ctx.fillStyle = '#000000';
+          ctx.fillStyle = '#1a1a1a';
           ctx.fillRect(0, 0, canvas.width, canvas.height);
+          ctx.fillStyle = '#22c55e';
+          ctx.font = '14px monospace';
+          ctx.textAlign = 'center';
+          ctx.fillText('ERROR', canvas.width / 2, canvas.height / 2);
         }
       }
     });
@@ -83,18 +100,14 @@ const PhainonShrine = () => {
     if (!video) return;
 
     const handleLoadedData = () => {
+      console.log('Video loaded successfully');
       setVideoLoaded(true);
       // Sync to current position
       video.currentTime = currentVideoPosition;
-      video.play().then(() => {
-        setIsPlaying(true);
-        drawVideoFrames();
-      }).catch((e) => {
-        console.log('Autoplay blocked, user interaction needed');
-      });
     };
 
     const handlePlay = () => {
+      console.log('Video playing');
       setIsPlaying(true);
       if (!animationRef.current) {
         drawVideoFrames();
@@ -102,22 +115,32 @@ const PhainonShrine = () => {
     };
 
     const handlePause = () => {
+      console.log('Video paused');
       setIsPlaying(false);
     };
 
+    const handleCanPlay = () => {
+      console.log('Video can play');
+    };
+
     video.addEventListener('loadeddata', handleLoadedData);
+    video.addEventListener('canplay', handleCanPlay);
     video.addEventListener('play', handlePlay);
     video.addEventListener('pause', handlePause);
 
+    // Try to load video
+    video.load();
+
     return () => {
       video.removeEventListener('loadeddata', handleLoadedData);
+      video.removeEventListener('canplay', handleCanPlay);
       video.removeEventListener('play', handlePlay);
       video.removeEventListener('pause', handlePause);
       if (animationRef.current) {
         cancelAnimationFrame(animationRef.current);
       }
     };
-  }, []);
+  }, [currentVideoPosition]);
 
   // Sync video position every 10 seconds
   useEffect(() => {
@@ -211,16 +234,16 @@ const PhainonShrine = () => {
           </div>
         </div>
 
-        {/* Hidden Video Player (source for canvas) */}
+        {/* Video Player (source for canvas) */}
         <div className="border border-green-400/30 p-4 mb-4 md:mb-6">
           <div className="text-xs text-green-400/60 mb-2">PRIMARY_STREAM</div>
           <div className="aspect-video bg-black border border-green-400/20">
             <video
               ref={videoRef}
               className="w-full h-full"
-              muted
               loop
               playsInline
+              controls
               crossOrigin="anonymous"
             >
               <source src="/phainon.mp4" type="video/mp4" />
@@ -230,6 +253,11 @@ const PhainonShrine = () => {
           {!videoLoaded && (
             <div className="text-xs text-yellow-400 mt-2 text-center">
               LOADING VIDEO... (Make sure phainon.mp4 is in /public folder)
+            </div>
+          )}
+          {videoLoaded && !isPlaying && (
+            <div className="text-xs text-yellow-400 mt-2 text-center">
+              Click PLAY on the video to start all 100 instances
             </div>
           )}
         </div>
@@ -245,13 +273,10 @@ const PhainonShrine = () => {
               >
                 <canvas
                   ref={el => canvasRefs.current[i] = el}
-                  width="120"
-                  height="120"
+                  width="160"
+                  height="160"
                   className="w-full h-full"
                 />
-                <div className="absolute top-0 left-0 text-[8px] text-green-400 bg-black/80 px-1">
-                  {i.toString().padStart(3, '0')}
-                </div>
               </div>
             ))}
           </div>
