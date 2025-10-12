@@ -246,13 +246,13 @@ const PhainonShrine = () => {
               controls
               crossOrigin="anonymous"
             >
-              <source src="/phainon.mp4" type="video/mp4" />
+              <source src="https://www.youtube.com/watch?v=xQbetWZS-zs" type="video/mp4" />
               Your browser does not support video playback.
             </video>
           </div>
           {!videoLoaded && (
             <div className="text-xs text-yellow-400 mt-2 text-center">
-              LOADING VIDEO... (Make sure phainon.mp4 is in /public folder)
+              LOADING VIDEO...
             </div>
           )}
           {videoLoaded && !isPlaying && (
