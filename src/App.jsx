@@ -9,7 +9,8 @@ const PhainonShrine = () => {
   
   const [currentTime, setCurrentTime] = useState(Date.now());
   const [isPlaying, setIsPlaying] = useState(false);
-  const playerRef = useRef(null);
+  const [videoLoaded, setVideoLoaded] = useState(false);
+  const videoRef = useRef(null);
   const canvasRefs = useRef([]);
   const intervalRef = useRef(null);
   const animationRef = useRef(null);
@@ -47,45 +48,26 @@ const PhainonShrine = () => {
     };
   }, []);
 
-  // Draw system monitor displays
+  // Draw video to all 100 canvases
   const drawVideoFrames = () => {
-    if (!playerRef.current || !playerRef.current.getIframe) return;
+    const video = videoRef.current;
+    if (!video || video.paused || video.ended || !videoLoaded) {
+      animationRef.current = requestAnimationFrame(drawVideoFrames);
+      return;
+    }
 
-    canvasRefs.current.forEach((canvas, index) => {
+    canvasRefs.current.forEach((canvas) => {
       if (canvas) {
         const ctx = canvas.getContext('2d');
         try {
-          // Background
-          ctx.fillStyle = '#000000';
+          // Draw video frame to canvas
+          ctx.drawImage(video, 0, 0, canvas.width, canvas.height);
+          
+          // Add green tint overlay for terminal aesthetic
+          ctx.fillStyle = 'rgba(34, 197, 94, 0.1)';
           ctx.fillRect(0, 0, canvas.width, canvas.height);
-          
-          // Animated activity bar
-          const activityLevel = (Math.sin(Date.now() / 500 + index * 0.2) + 1) / 2;
-          const barHeight = activityLevel * canvas.height * 0.6;
-          
-          // Green activity indicator
-          const gradient = ctx.createLinearGradient(0, canvas.height, 0, canvas.height - barHeight);
-          gradient.addColorStop(0, 'rgba(34, 197, 94, 0.8)');
-          gradient.addColorStop(1, 'rgba(34, 197, 94, 0.2)');
-          ctx.fillStyle = gradient;
-          ctx.fillRect(0, canvas.height - barHeight, canvas.width, barHeight);
-          
-          // Instance ID
-          ctx.fillStyle = '#22c55e';
-          ctx.font = 'bold 14px monospace';
-          ctx.textAlign = 'center';
-          ctx.textBaseline = 'middle';
-          ctx.fillText(index.toString().padStart(3, '0'), canvas.width / 2, canvas.height / 2);
-          
-          // Status indicator (blinking dot)
-          if (isPlaying && Math.floor(Date.now() / 500) % 2 === 0) {
-            ctx.fillStyle = '#22c55e';
-            ctx.beginPath();
-            ctx.arc(canvas.width - 8, 8, 3, 0, Math.PI * 2);
-            ctx.fill();
-          }
-          
         } catch (e) {
+          // Fallback if drawing fails
           ctx.fillStyle = '#000000';
           ctx.fillRect(0, 0, canvas.width, canvas.height);
         }
@@ -95,46 +77,42 @@ const PhainonShrine = () => {
     animationRef.current = requestAnimationFrame(drawVideoFrames);
   };
 
-  // YouTube IFrame API
+  // Setup video element
   useEffect(() => {
-    const tag = document.createElement('script');
-    tag.src = 'https://www.youtube.com/iframe_api';
-    const firstScriptTag = document.getElementsByTagName('script')[0];
-    firstScriptTag.parentNode.insertBefore(tag, firstScriptTag);
+    const video = videoRef.current;
+    if (!video) return;
 
-    window.onYouTubeIframeAPIReady = () => {
-      playerRef.current = new window.YT.Player('youtube-player', {
-        videoId: 'xQbetWZS-zs',
-        playerVars: {
-          autoplay: 1,
-          mute: 1,
-          controls: 1,
-          loop: 1,
-          playlist: 'xQbetWZS-zs',
-          start: currentVideoPosition
-        },
-        events: {
-          onReady: (event) => {
-            event.target.seekTo(currentVideoPosition, true);
-            event.target.playVideo();
-            setIsPlaying(true);
-            drawVideoFrames();
-          },
-          onStateChange: (event) => {
-            if (event.data === window.YT.PlayerState.PLAYING) {
-              setIsPlaying(true);
-              if (!animationRef.current) {
-                drawVideoFrames();
-              }
-            } else if (event.data === window.YT.PlayerState.PAUSED) {
-              setIsPlaying(false);
-            }
-          }
-        }
+    const handleLoadedData = () => {
+      setVideoLoaded(true);
+      // Sync to current position
+      video.currentTime = currentVideoPosition;
+      video.play().then(() => {
+        setIsPlaying(true);
+        drawVideoFrames();
+      }).catch((e) => {
+        console.log('Autoplay blocked, user interaction needed');
       });
     };
 
+    const handlePlay = () => {
+      setIsPlaying(true);
+      if (!animationRef.current) {
+        drawVideoFrames();
+      }
+    };
+
+    const handlePause = () => {
+      setIsPlaying(false);
+    };
+
+    video.addEventListener('loadeddata', handleLoadedData);
+    video.addEventListener('play', handlePlay);
+    video.addEventListener('pause', handlePause);
+
     return () => {
+      video.removeEventListener('loadeddata', handleLoadedData);
+      video.removeEventListener('play', handlePlay);
+      video.removeEventListener('pause', handlePause);
       if (animationRef.current) {
         cancelAnimationFrame(animationRef.current);
       }
@@ -144,18 +122,28 @@ const PhainonShrine = () => {
   // Sync video position every 10 seconds
   useEffect(() => {
     const syncInterval = setInterval(() => {
-      if (playerRef.current && playerRef.current.seekTo) {
+      const video = videoRef.current;
+      if (video && videoLoaded) {
         const expectedPosition = (Date.now() - START_TIME) / 1000 % VIDEO_DURATION;
-        const currentPos = playerRef.current.getCurrentTime();
+        const currentPos = video.currentTime;
         
+        // If drift is more than 2 seconds, resync
         if (Math.abs(currentPos - expectedPosition) > 2) {
-          playerRef.current.seekTo(expectedPosition, true);
+          video.currentTime = expectedPosition;
         }
       }
     }, 10000);
 
     return () => clearInterval(syncInterval);
-  }, []);
+  }, [videoLoaded]);
+
+  // Handle manual play (for autoplay restrictions)
+  const handlePlayClick = () => {
+    const video = videoRef.current;
+    if (video) {
+      video.play();
+    }
+  };
 
   return (
     <div className="min-h-screen bg-black text-green-400 font-mono p-4 md:p-8">
@@ -207,23 +195,48 @@ const PhainonShrine = () => {
         <div className="border border-green-400/30 p-4 mb-4 md:mb-6">
           <div className="flex justify-between items-center">
             <span className="text-xs">STATUS:</span>
-            <span className={`text-sm ${isPlaying ? 'text-green-400' : 'text-yellow-400'}`}>
-              [{isPlaying ? 'RUNNING' : 'PAUSED'}]
-            </span>
+            <div className="flex items-center gap-3">
+              <span className={`text-sm ${isPlaying ? 'text-green-400' : 'text-yellow-400'}`}>
+                [{isPlaying ? 'RUNNING' : 'PAUSED'}]
+              </span>
+              {!isPlaying && (
+                <button 
+                  onClick={handlePlayClick}
+                  className="text-xs border border-green-400/50 px-3 py-1 hover:bg-green-400/10 transition-colors"
+                >
+                  START
+                </button>
+              )}
+            </div>
           </div>
         </div>
 
-        {/* Video Player */}
+        {/* Hidden Video Player (source for canvas) */}
         <div className="border border-green-400/30 p-4 mb-4 md:mb-6">
           <div className="text-xs text-green-400/60 mb-2">PRIMARY_STREAM</div>
           <div className="aspect-video bg-black border border-green-400/20">
-            <div id="youtube-player" className="w-full h-full"></div>
+            <video
+              ref={videoRef}
+              className="w-full h-full"
+              muted
+              loop
+              playsInline
+              crossOrigin="anonymous"
+            >
+              <source src="/phainon.mp4" type="video/mp4" />
+              Your browser does not support video playback.
+            </video>
           </div>
+          {!videoLoaded && (
+            <div className="text-xs text-yellow-400 mt-2 text-center">
+              LOADING VIDEO... (Make sure phainon.mp4 is in /public folder)
+            </div>
+          )}
         </div>
 
         {/* Grid of 100 Instances */}
         <div className="border border-green-400/30 p-4">
-          <div className="text-xs text-green-400/60 mb-3">PARALLEL_INSTANCES [100x]</div>
+          <div className="text-xs text-green-400/60 mb-3">PARALLEL_INSTANCES [100x] - LIVE FEED</div>
           <div className="grid grid-cols-5 sm:grid-cols-10 gap-1">
             {Array.from({ length: GRID_SIZE }).map((_, i) => (
               <div
@@ -232,14 +245,17 @@ const PhainonShrine = () => {
               >
                 <canvas
                   ref={el => canvasRefs.current[i] = el}
-                  width="80"
-                  height="80"
+                  width="120"
+                  height="120"
                   className="w-full h-full"
                 />
+                <div className="absolute top-0 left-0 text-[8px] text-green-400 bg-black/80 px-1">
+                  {i.toString().padStart(3, '0')}
+                </div>
               </div>
             ))}
           </div>
-          <div className="text-xs text-green-400/60 mt-3">MULTIPLIER: x100 per cycle</div>
+          <div className="text-xs text-green-400/60 mt-3">MULTIPLIER: x100 per cycle | STREAM: SYNCHRONIZED</div>
         </div>
 
         {/* Footer */}
