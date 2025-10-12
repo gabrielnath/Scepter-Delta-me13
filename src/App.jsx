@@ -4,19 +4,20 @@ const PhainonShrine = () => {
   const START_TIME = new Date("2025-10-12T23:30:00+07:00").getTime();
   const VIDEO_DURATION = 288;
   const GRID_SIZE = 100;
+  const GRID_COLS = 10;
+  const GRID_ROWS = 10;
+  const CANVAS_SIZE = 64; // Each instance is 64x64
   const GOAL = 33550336;
-  const CANVAS_SIZE = 64; // Small for perf!
 
   const [currentTime, setCurrentTime] = useState(Date.now());
   const [isPlaying, setIsPlaying] = useState(false);
   const [videoLoaded, setVideoLoaded] = useState(false);
 
   const videoRef = useRef(null);
-  const canvasRefs = useRef([]);
-  const bufferCanvasRef = useRef(null);
+  const masterCanvasRef = useRef(null);
   const animationRef = useRef(null);
 
-  // Calculate runtime, stats...
+  // Derived values
   const elapsedSeconds = Math.max(0, Math.floor((currentTime - START_TIME) / 1000));
   const completedLoops = Math.floor(elapsedSeconds / VIDEO_DURATION);
   const currentVideoPosition = elapsedSeconds % VIDEO_DURATION;
@@ -32,67 +33,72 @@ const PhainonShrine = () => {
   };
   const formatVideoTime = (s) => `${Math.floor(s / 60)}:${(s % 60).toString().padStart(2, "0")}`;
 
-  // Timer for updating UI
+  // UI update loop (for stats/time)
   useEffect(() => {
     const interval = setInterval(() => setCurrentTime(Date.now()), 1000);
     return () => clearInterval(interval);
   }, []);
 
-  // Efficient drawing engine
+  // Efficient master-canvas grid drawing
   useEffect(() => {
-    if (!bufferCanvasRef.current)
-      bufferCanvasRef.current = document.createElement("canvas");
-    bufferCanvasRef.current.width = CANVAS_SIZE;
-    bufferCanvasRef.current.height = CANVAS_SIZE;
-
-    const bufferCtx = bufferCanvasRef.current.getContext("2d");
-    let lastDrawTime = 0;
-    const FPS = 15;
-
-    const draw = () => {
-      const now = performance.now();
-      if (!videoLoaded || !videoRef.current) {
-        animationRef.current = requestAnimationFrame(draw);
-        return;
+    let stop = false;
+    const canvas = masterCanvasRef.current;
+    if (!canvas) return;
+    const ctx = canvas.getContext("2d");
+    const drawGrid = () => {
+      if (!videoLoaded || !videoRef.current) return;
+      for (let i = 0; i < GRID_SIZE; i++) {
+        const col = i % GRID_COLS;
+        const row = Math.floor(i / GRID_COLS);
+        const x = col * CANVAS_SIZE;
+        const y = row * CANVAS_SIZE;
+        ctx.clearRect(x, y, CANVAS_SIZE, CANVAS_SIZE);
+        // Draw the video frame into each grid cell
+        ctx.drawImage(videoRef.current, 0, 0, CANVAS_SIZE, CANVAS_SIZE, x, y, CANVAS_SIZE, CANVAS_SIZE);
+        // Overlays
+        ctx.save();
+        ctx.fillStyle = "rgba(34,197,94,.08)";
+        ctx.fillRect(x, y, CANVAS_SIZE, CANVAS_SIZE);
+        ctx.fillStyle = "rgba(0,0,0,0.7)";
+        ctx.fillRect(x, y, 20, 12);
+        ctx.fillStyle = "#22c55e";
+        ctx.font = "9px monospace";
+        ctx.fillText(i.toString().padStart(3, "0"), x + 2, y + 10);
+        ctx.restore();
       }
-      if (videoRef.current.paused || videoRef.current.ended) {
-        animationRef.current = requestAnimationFrame(draw);
-        return;
-      }
-      if (now - lastDrawTime < 1000 / FPS) {
-        animationRef.current = requestAnimationFrame(draw);
-        return;
-      }
-      lastDrawTime = now;
+    };
 
-      // Draw video to buffer canvas ONCE
-      bufferCtx.clearRect(0, 0, CANVAS_SIZE, CANVAS_SIZE);
-      bufferCtx.drawImage(videoRef.current, 0, 0, CANVAS_SIZE, CANVAS_SIZE);
+    // Animation loop: use requestVideoFrameCallback if supported
+    let cleanupVideoFrameCallback = null;
 
-      // Copy buffer canvas to all grid canvases, then overlay
-      canvasRefs.current.forEach((canvas, index) => {
-        if (canvas) {
-          const ctx = canvas.getContext("2d");
-          ctx.clearRect(0, 0, CANVAS_SIZE, CANVAS_SIZE);
-          ctx.drawImage(bufferCanvasRef.current, 0, 0, CANVAS_SIZE, CANVAS_SIZE);
-          // effect overlays:
-          ctx.fillStyle = "rgba(34,197,94,.08)";
-          ctx.fillRect(0, 0, CANVAS_SIZE, CANVAS_SIZE);
-          ctx.fillStyle = "rgba(0,0,0,0.7)";
-          ctx.fillRect(0, 0, 20, 12);
-          ctx.fillStyle = "#22c55e";
-          ctx.font = "9px monospace";
-          ctx.fillText(index.toString().padStart(3, "0"), 2, 10);
+    if (videoRef.current && "requestVideoFrameCallback" in videoRef.current) {
+      const v = videoRef.current;
+      function onFrame() {
+        if (!stop && videoLoaded && isPlaying) {
+          drawGrid();
+          v.requestVideoFrameCallback(onFrame);
         }
-      });
+      }
+      v.requestVideoFrameCallback(onFrame);
+      cleanupVideoFrameCallback = () => { /* auto stops */ };
+    } else {
+      // fallback for old browsers
+      const renderLoop = () => {
+        if (stop) return;
+        if (videoLoaded && isPlaying) drawGrid();
+        animationRef.current = requestAnimationFrame(renderLoop);
+      };
+      renderLoop();
+      cleanupVideoFrameCallback = () => {
+        if (animationRef.current) cancelAnimationFrame(animationRef.current);
+      };
+    }
 
-      animationRef.current = requestAnimationFrame(draw);
-    };
-    animationRef.current = requestAnimationFrame(draw);
     return () => {
-      if (animationRef.current) cancelAnimationFrame(animationRef.current);
+      stop = true;
+      cleanupVideoFrameCallback();
     };
-  }, [videoLoaded]);
+  }, [videoLoaded, isPlaying]);
 
   // Video events
   useEffect(() => {
@@ -115,7 +121,7 @@ const PhainonShrine = () => {
     };
   }, [currentVideoPosition]);
 
-  // Periodically sync the video time for accuracy
+  // Periodically resync the video time
   useEffect(() => {
     const syncInterval = setInterval(() => {
       const video = videoRef.current;
@@ -169,7 +175,7 @@ const PhainonShrine = () => {
             </div>
           </div>
         </div>
-        {/* Progress bar */}
+        {/* Progress Bar */}
         <div className="border border-green-400/30 p-4 mb-4 md:mb-6">
           <div className="flex justify-between text-xs mb-2">
             <span>PROGRESS</span>
@@ -177,7 +183,7 @@ const PhainonShrine = () => {
           </div>
           <div className="w-full bg-green-400/10 h-4 border border-green-400/30">
             <div className="h-full bg-green-400/50 transition-all duration-1000"
-                 style={{ width: `${Math.min(100, (totalCount / GOAL) * 100)}%` }}/>
+              style={{ width: `${Math.min(100, (totalCount / GOAL) * 100)}%` }} />
           </div>
         </div>
         {/* Status */}
@@ -225,24 +231,31 @@ const PhainonShrine = () => {
             </div>
           )}
         </div>
-        {/* Grid of 100 Instances */}
+        {/* Single master grid! */}
         <div className="border border-green-400/30 p-4">
           <div className="text-xs text-green-400/60 mb-3">
             PARALLEL_INSTANCES [100x] - LIVE FEED
           </div>
-          <div className="grid grid-cols-5 sm:grid-cols-10 gap-1">
-            {Array.from({ length: GRID_SIZE }).map((_, i) => (
-              <div key={i}
-                   className="aspect-square relative border border-green-400/30 overflow-hidden bg-black">
-                <canvas
-                  ref={el => canvasRefs.current[i] = el}
-                  width={CANVAS_SIZE}
-                  height={CANVAS_SIZE}
-                  className="w-full h-full"
-                  tabIndex={-1}
-                />
-              </div>
-            ))}
+          <div
+            style={{
+              width: GRID_COLS * CANVAS_SIZE,
+              height: GRID_ROWS * CANVAS_SIZE,
+              border: "1px solid #22c55e40",
+              maxWidth: "100%",
+              margin: "0 auto"
+            }}
+          >
+            <canvas
+              ref={masterCanvasRef}
+              width={GRID_COLS * CANVAS_SIZE}
+              height={GRID_ROWS * CANVAS_SIZE}
+              style={{
+                width: "100%",
+                height: "auto",
+                display: "block"
+              }}
+              tabIndex={-1}
+            />
           </div>
           <div className="text-xs text-green-400/60 mt-3">
             MULTIPLIER: x100 per cycle | STREAM: SYNCHRONIZED
