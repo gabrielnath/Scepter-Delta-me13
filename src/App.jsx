@@ -4,14 +4,14 @@ const PhainonShrine = () => {
   // Hardcoded start: Oct 12, 2025, 11:30 PM GMT+7
   const START_TIME = new Date('2025-10-12T23:30:00+07:00').getTime();
   const VIDEO_DURATION = 288; // 4:48 in seconds
-  const GRID_SIZE = 36; // Reduced for performance
+  const GRID_SIZE = 100;
   const GOAL = 33550336;
   
   const [currentTime, setCurrentTime] = useState(Date.now());
   const [isPlaying, setIsPlaying] = useState(false);
   const [videoLoaded, setVideoLoaded] = useState(false);
   const videoRef = useRef(null);
-  const gridCanvasRef = useRef(null);
+  const canvasRefs = useRef([]);
   const intervalRef = useRef(null);
   const animationRef = useRef(null);
 
@@ -49,54 +49,31 @@ const PhainonShrine = () => {
   }, []);
 
   // Draw video to all 100 canvases
-  // Throttle drawing to 15 FPS
-  let lastDrawTime = 0;
-  const FPS = 15;
-  const GRID_COLS = 6;
-  const GRID_ROWS = 6;
-  const CELL_SIZE = 80;
-  const drawVideoFrames = (timestamp) => {
+  const drawVideoFrames = () => {
     const video = videoRef.current;
-    const canvas = gridCanvasRef.current;
-    if (!video || !videoLoaded || !canvas) {
+    if (!video || video.paused || video.ended || !videoLoaded) {
       animationRef.current = requestAnimationFrame(drawVideoFrames);
       return;
     }
 
-    // Only draw if video is actually playing
-    if (video.paused || video.ended) {
-      animationRef.current = requestAnimationFrame(drawVideoFrames);
-      return;
-    }
-
-    if (!lastDrawTime || timestamp - lastDrawTime > 1000 / FPS) {
-      const ctx = canvas.getContext('2d', { willReadFrequently: false });
-      ctx.clearRect(0, 0, canvas.width, canvas.height);
-      for (let row = 0; row < GRID_ROWS; row++) {
-        for (let col = 0; col < GRID_COLS; col++) {
-          const x = col * CELL_SIZE;
-          const y = row * CELL_SIZE;
-          try {
-            ctx.drawImage(video, 0, 0, canvas.width, canvas.height, x, y, CELL_SIZE, CELL_SIZE);
-            ctx.fillStyle = 'rgba(34, 197, 94, 0.08)';
-            ctx.fillRect(x, y, CELL_SIZE, CELL_SIZE);
-            ctx.fillStyle = 'rgba(0, 0, 0, 0.7)';
-            ctx.fillRect(x, y, 30, 12);
-            ctx.fillStyle = '#22c55e';
-            ctx.font = '9px monospace';
-            ctx.fillText((row * GRID_COLS + col).toString().padStart(3, '0'), x + 2, y + 10);
-          } catch (e) {
-            ctx.fillStyle = '#1a1a1a';
-            ctx.fillRect(x, y, CELL_SIZE, CELL_SIZE);
-            ctx.fillStyle = '#22c55e';
-            ctx.font = '14px monospace';
-            ctx.textAlign = 'center';
-            ctx.fillText('ERROR', x + CELL_SIZE / 2, y + CELL_SIZE / 2);
-          }
+    canvasRefs.current.forEach((canvas) => {
+      if (canvas) {
+        const ctx = canvas.getContext('2d');
+        try {
+          // Draw video frame to canvas
+          ctx.drawImage(video, 0, 0, canvas.width, canvas.height);
+          
+          // Add green tint overlay for terminal aesthetic
+          ctx.fillStyle = 'rgba(34, 197, 94, 0.1)';
+          ctx.fillRect(0, 0, canvas.width, canvas.height);
+        } catch (e) {
+          // Fallback if drawing fails
+          ctx.fillStyle = '#000000';
+          ctx.fillRect(0, 0, canvas.width, canvas.height);
         }
       }
-      lastDrawTime = timestamp;
-    }
+    });
+
     animationRef.current = requestAnimationFrame(drawVideoFrames);
   };
 
@@ -106,14 +83,18 @@ const PhainonShrine = () => {
     if (!video) return;
 
     const handleLoadedData = () => {
-      console.log('Video loaded successfully');
       setVideoLoaded(true);
       // Sync to current position
       video.currentTime = currentVideoPosition;
+      video.play().then(() => {
+        setIsPlaying(true);
+        drawVideoFrames();
+      }).catch((e) => {
+        console.log('Autoplay blocked, user interaction needed');
+      });
     };
 
     const handlePlay = () => {
-      console.log('Video playing');
       setIsPlaying(true);
       if (!animationRef.current) {
         drawVideoFrames();
@@ -121,32 +102,22 @@ const PhainonShrine = () => {
     };
 
     const handlePause = () => {
-      console.log('Video paused');
       setIsPlaying(false);
     };
 
-    const handleCanPlay = () => {
-      console.log('Video can play');
-    };
-
     video.addEventListener('loadeddata', handleLoadedData);
-    video.addEventListener('canplay', handleCanPlay);
     video.addEventListener('play', handlePlay);
     video.addEventListener('pause', handlePause);
 
-    // Try to load video
-    video.load();
-
     return () => {
       video.removeEventListener('loadeddata', handleLoadedData);
-      video.removeEventListener('canplay', handleCanPlay);
       video.removeEventListener('play', handlePlay);
       video.removeEventListener('pause', handlePause);
       if (animationRef.current) {
         cancelAnimationFrame(animationRef.current);
       }
     };
-  }, [currentVideoPosition]);
+  }, []);
 
   // Sync video position every 10 seconds
   useEffect(() => {
@@ -270,17 +241,26 @@ const PhainonShrine = () => {
 
         {/* Grid of 100 Instances */}
         <div className="border border-green-400/30 p-4">
-          <div className="text-xs text-green-400/60 mb-3">PARALLEL_INSTANCES [36x] - LIVE FEED (Single Canvas)</div>
-          <div className="flex justify-center">
-            <canvas
-              ref={gridCanvasRef}
-              width={GRID_COLS * CELL_SIZE}
-              height={GRID_ROWS * CELL_SIZE}
-              className="border border-green-400/30 bg-black"
-              style={{ width: GRID_COLS * CELL_SIZE, height: GRID_ROWS * CELL_SIZE }}
-            />
+          <div className="text-xs text-green-400/60 mb-3">PARALLEL_INSTANCES [100x] - LIVE FEED</div>
+          <div className="grid grid-cols-5 sm:grid-cols-10 gap-1">
+            {Array.from({ length: GRID_SIZE }).map((_, i) => (
+              <div
+                key={i}
+                className="aspect-square relative border border-green-400/30 overflow-hidden bg-black"
+              >
+                <canvas
+                  ref={el => canvasRefs.current[i] = el}
+                  width="120"
+                  height="120"
+                  className="w-full h-full"
+                />
+                <div className="absolute top-0 left-0 text-[8px] text-green-400 bg-black/80 px-1">
+                  {i.toString().padStart(3, '0')}
+                </div>
+              </div>
+            ))}
           </div>
-          <div className="text-xs text-green-400/60 mt-3">MULTIPLIER: x36 per cycle | STREAM: SYNCHRONIZED</div>
+          <div className="text-xs text-green-400/60 mt-3">MULTIPLIER: x100 per cycle | STREAM: SYNCHRONIZED</div>
         </div>
 
         {/* Footer */}
