@@ -50,63 +50,36 @@ const PhainonShrine = () => {
     };
   }, []);
 
-  // Draw video to all 100 canvases
+  // Draw video to all 100 canvases - simplified version
   const drawVideoFrames = () => {
     const video = videoRef.current;
-    if (!video || !videoLoaded) {
+    
+    // Check if we can draw
+    if (!video || video.paused || video.ended || video.readyState < 3) {
       animationRef.current = requestAnimationFrame(drawVideoFrames);
       return;
     }
 
-    if (video.paused || video.ended || video.readyState < 2) {
-      animationRef.current = requestAnimationFrame(drawVideoFrames);
-      return;
-    }
-
-    let successCount = 0;
-    let errorCount = 0;
-
+    // Draw to all canvases
     canvasRefs.current.forEach((canvas, index) => {
-      if (canvas) {
-        const ctx = canvas.getContext('2d', { willReadFrequently: false });
-        try {
-          // Clear canvas first
-          ctx.clearRect(0, 0, canvas.width, canvas.height);
-          
-          // Draw video frame
-          ctx.drawImage(video, 0, 0, canvas.width, canvas.height);
-          
-          // Add green tint
-          ctx.fillStyle = 'rgba(34, 197, 94, 0.08)';
-          ctx.fillRect(0, 0, canvas.width, canvas.height);
-          
-          // Instance ID
-          ctx.fillStyle = 'rgba(0, 0, 0, 0.8)';
-          ctx.fillRect(0, 0, 35, 14);
-          ctx.fillStyle = '#22c55e';
-          ctx.font = 'bold 10px monospace';
-          ctx.fillText(index.toString().padStart(3, '0'), 3, 11);
-          
-          successCount++;
-        } catch (e) {
-          errorCount++;
-          // Show error state
-          ctx.fillStyle = '#000000';
-          ctx.fillRect(0, 0, canvas.width, canvas.height);
-          ctx.strokeStyle = '#ff0000';
-          ctx.strokeRect(0, 0, canvas.width, canvas.height);
-          ctx.fillStyle = '#ff0000';
-          ctx.font = '10px monospace';
-          ctx.textAlign = 'center';
-          ctx.fillText('ERR', canvas.width / 2, canvas.height / 2);
-        }
-      }
+      if (!canvas) return;
+      
+      const ctx = canvas.getContext('2d');
+      
+      // Draw the video frame
+      ctx.drawImage(video, 0, 0, canvas.width, canvas.height);
+      
+      // Add green tint
+      ctx.fillStyle = 'rgba(34, 197, 94, 0.1)';
+      ctx.fillRect(0, 0, canvas.width, canvas.height);
+      
+      // Add instance ID
+      ctx.fillStyle = 'rgba(0, 0, 0, 0.8)';
+      ctx.fillRect(0, 0, 35, 15);
+      ctx.fillStyle = '#22c55e';
+      ctx.font = 'bold 11px monospace';
+      ctx.fillText(index.toString().padStart(3, '0'), 3, 12);
     });
-
-    // Log drawing status every 60 frames
-    if (Math.random() < 0.016) {
-      console.log(`Drawing: ${successCount} success, ${errorCount} errors`);
-    }
 
     animationRef.current = requestAnimationFrame(drawVideoFrames);
   };
@@ -119,12 +92,15 @@ const PhainonShrine = () => {
     const handleLoadedData = () => {
       console.log('Video metadata loaded');
       setVideoLoaded(true);
-      video.currentTime = currentVideoPosition;
     };
 
     const handleCanPlayThrough = () => {
       console.log('Video fully loaded and can play through');
       setVideoFullyLoaded(true);
+      // Set initial position once on load
+      if (video.currentTime === 0) {
+        video.currentTime = currentVideoPosition;
+      }
     };
 
     const handleProgress = () => {
@@ -169,7 +145,7 @@ const PhainonShrine = () => {
         cancelAnimationFrame(animationRef.current);
       }
     };
-  }, [currentVideoPosition]);
+  }, []);
 
   // Sync video position every 10 seconds
   useEffect(() => {
@@ -274,19 +250,9 @@ const PhainonShrine = () => {
         <div className="border border-green-400/30 p-4 mb-4 md:mb-6">
           <div className="flex justify-between items-center">
             <span className="text-xs">STATUS:</span>
-            <div className="flex items-center gap-3">
-              <span className={`text-sm ${isPlaying ? 'text-green-400' : 'text-yellow-400'}`}>
-                [{isPlaying ? 'RUNNING' : 'PAUSED'}]
-              </span>
-              {!isPlaying && (
-                <button 
-                  onClick={handlePlayClick}
-                  className="text-xs border border-green-400/50 px-3 py-1 hover:bg-green-400/10 transition-colors"
-                >
-                  START
-                </button>
-              )}
-            </div>
+            <span className={`text-sm ${isPlaying ? 'text-green-400' : 'text-yellow-400'}`}>
+              [{isPlaying ? 'RUNNING' : 'PAUSED'}]
+            </span>
           </div>
         </div>
 
@@ -300,7 +266,7 @@ const PhainonShrine = () => {
               loop
               playsInline
               controls
-              crossOrigin="anonymous"
+              preload="auto"
             >
               <source src="/phainon.mp4" type="video/mp4" />
               Your browser does not support video playback.
