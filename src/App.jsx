@@ -291,7 +291,18 @@ const PhainonShrine = () => {
           </div>
         </div>
 
-        {/* Video Player (visible, no overlays) */}
+        {/* Fetching Status - Separate Tab */}
+        <div className="border border-green-400/30 p-3 mb-4 md:mb-6">
+          <div className="text-xs text-green-400/60 flex items-center gap-2">
+            <span className="inline-block w-3">{spinnerFrames[spinnerIndex]}</span>
+            <span>FETCH:</span>
+            <a href="https://www.youtube.com/watch?v=xQbetWZS-zs" target="_blank" rel="noopener noreferrer" className="text-green-400 hover:text-green-300 transition-colors underline truncate">
+              Honkai: Star Rail - "Kindling" Animated Short
+            </a>
+          </div>
+        </div>
+
+        {/* Video Player */}
         <div className="border border-green-400/30 p-4 mb-4 md:mb-6">
           <div className="text-xs text-green-400/60 mb-2">PRIMARY_STREAM</div>
           <div className="aspect-video bg-black border border-green-400/20 relative">
@@ -306,58 +317,55 @@ const PhainonShrine = () => {
               <source src="/phainon.mp4" type="video/mp4" />
             </video>
           </div>
-          
-          {/* Control Panel - Below Video */}
-          <div className="border-t border-green-400/30 mt-3 pt-3 grid grid-cols-1 md:grid-cols-2 gap-3">
-            {/* Left: Fetching Status */}
-            <div className="text-xs text-green-400/60 flex items-center gap-2">
-              <span>{spinnerFrames[spinnerIndex]}</span>
-              <span>FETCH:</span>
-              <a href="https://www.youtube.com/watch?v=xQbetWZS-zs" target="_blank" rel="noopener noreferrer" className="text-green-400 hover:text-green-300 transition-colors underline">
-                Honkai: Star Rail - "Kindling"
-              </a>
-            </div>
-            
-            {/* Right: Audio Controls */}
-            <div className="flex items-center gap-3 md:justify-end">
-              <span className="text-xs text-green-400/60">AUDIO:</span>
-              <button
+        </div>
+
+        {/* Audio Controls - Separate Tab */}
+        <div className="border border-green-400/30 p-3 mb-4 md:mb-6">
+          <div className="flex items-center gap-3 text-xs">
+            <span className="text-green-400/60">AUDIO:</span>
+            <button
+              onClick={(e) => {
+                e.stopPropagation();
+                const video = videoRef.current;
+                if (video && videoFullyLoaded) {
+                  video.muted = !video.muted;
+                  setIsMuted(video.muted);
+                }
+              }}
+              disabled={!videoFullyLoaded}
+              className="text-green-400 hover:text-green-300 transition-colors border border-green-400/30 px-2 py-1 disabled:opacity-50 disabled:cursor-not-allowed"
+            >
+              {isMuted ? '[MUTE]' : '[ON]'}
+            </button>
+            <div className="flex-1 flex items-center gap-2">
+              <span className="text-green-400/60">VOL:</span>
+              <div 
+                className="flex-1 max-w-xs h-4 border border-green-400/30 bg-black relative cursor-pointer"
                 onClick={(e) => {
-                  e.stopPropagation();
+                  if (!videoFullyLoaded) return;
+                  const rect = e.currentTarget.getBoundingClientRect();
+                  const percent = Math.round(((e.clientX - rect.left) / rect.width) * 100);
                   const video = videoRef.current;
+                  setVolume(percent);
                   if (video) {
-                    video.muted = !video.muted;
-                    setIsMuted(video.muted);
-                  }
-                }}
-                className="text-xs text-green-400 hover:text-green-300 transition-colors border border-green-400/30 px-2 py-1"
-              >
-                {isMuted ? '[MUTE]' : '[ON]'}
-              </button>
-              <input
-                type="range"
-                min="0"
-                max="100"
-                value={volume}
-                onChange={(e) => {
-                  e.stopPropagation();
-                  const video = videoRef.current;
-                  const newVolume = parseInt(e.target.value);
-                  setVolume(newVolume);
-                  if (video) {
-                    video.volume = newVolume / 100;
-                    if (newVolume > 0 && video.muted) {
+                    video.volume = percent / 100;
+                    if (percent > 0 && video.muted) {
                       video.muted = false;
                       setIsMuted(false);
                     }
                   }
                 }}
-                className="w-24 h-1 bg-green-400/20 accent-green-400 cursor-pointer"
-                style={{
-                  background: `linear-gradient(to right, #22c55e ${volume}%, rgba(34, 197, 94, 0.2) ${volume}%)`
-                }}
-              />
-              <span className="text-xs text-green-400/60 w-8">{volume}%</span>
+              >
+                <div 
+                  className="h-full bg-green-400/50 transition-all duration-100"
+                  style={{ width: `${volume}%` }}
+                />
+                <div 
+                  className="absolute top-0 left-0 right-0 bottom-0 flex items-center justify-center text-[10px] text-green-400 font-bold pointer-events-none"
+                >
+                  {volume}%
+                </div>
+              </div>
             </div>
           </div>
         </div>
