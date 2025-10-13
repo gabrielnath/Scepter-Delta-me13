@@ -294,7 +294,7 @@ const PhainonShrine = () => {
         {/* Fetching Status - Separate Tab */}
         <div className="border border-green-400/30 p-3 mb-4 md:mb-6">
           <div className="text-xs text-green-400/60 flex items-center gap-2">
-            <span className="inline-block w-3 font-mono">{spinnerFrames[spinnerIndex]}</span>
+            <span className="inline-block w-3 font-[ui-monospace,monospace] tracking-tight">{spinnerFrames[spinnerIndex]}</span>
             <span>FETCH:</span>
             <a href="https://www.youtube.com/watch?v=xQbetWZS-zs" target="_blank" rel="noopener noreferrer" className="text-green-400 hover:text-green-300 transition-colors underline truncate">
               Honkai: Star Rail - "Kindling" Animated Short
