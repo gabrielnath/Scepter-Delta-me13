@@ -12,12 +12,15 @@ const PhainonShrine = () => {
   const [videoLoaded, setVideoLoaded] = useState(false);
   const [videoFullyLoaded, setVideoFullyLoaded] = useState(false);
   const [loadProgress, setLoadProgress] = useState(0);
-  const [userInteracted, setUserInteracted] = useState(false);
   const [isMuted, setIsMuted] = useState(true);
+  const [volume, setVolume] = useState(100);
+  const [spinnerIndex, setSpinnerIndex] = useState(0);
   const videoRef = useRef(null);
   const canvasRefs = useRef([]);
   const intervalRef = useRef(null);
   const animationRef = useRef(null);
+
+  const spinnerFrames = ['/', '-', '\\', '|'];
 
   // Calculate elapsed time and stats
   const elapsedSeconds = Math.max(0, Math.floor((currentTime - START_TIME) / 1000));
@@ -26,13 +29,13 @@ const PhainonShrine = () => {
   const totalCount = completedLoops * GRID_SIZE;
   const progressPercent = ((totalCount / GOAL) * 100).toFixed(4);
 
-  // Format time display
+  // Format time display with 4 digits for days
   const formatTime = (seconds) => {
     const days = Math.floor(seconds / 86400);
     const hours = Math.floor((seconds % 86400) / 3600);
     const mins = Math.floor((seconds % 3600) / 60);
     const secs = seconds % 60;
-    return `${days.toString().padStart(3, '0')}:${hours.toString().padStart(2, '0')}:${mins.toString().padStart(2, '0')}:${secs.toString().padStart(2, '0')}`;
+    return `${days.toString().padStart(4, '0')}:${hours.toString().padStart(2, '0')}:${mins.toString().padStart(2, '0')}:${secs.toString().padStart(2, '0')}`;
   };
 
   const formatVideoTime = (seconds) => {
@@ -45,6 +48,7 @@ const PhainonShrine = () => {
   useEffect(() => {
     intervalRef.current = setInterval(() => {
       setCurrentTime(Date.now());
+      setSpinnerIndex(prev => (prev + 1) % 4);
     }, 1000);
 
     return () => {
@@ -104,13 +108,14 @@ const PhainonShrine = () => {
         video.currentTime = currentVideoPosition;
       }
       video.muted = true;
+      video.volume = 1.0;
       setIsMuted(true);
-      // Try to autoplay
+      setVolume(100);
+      // Auto-start playing (muted, no interaction needed)
       video.play().then(() => {
         console.log('Autoplay successful');
-        setUserInteracted(true);
       }).catch((e) => {
-        console.log('Autoplay blocked - user interaction required');
+        console.log('Autoplay failed:', e);
       });
     };
 
@@ -178,14 +183,14 @@ const PhainonShrine = () => {
         }
         
         // Auto-restart if paused (to keep sync)
-        if (video.paused && userInteracted) {
+        if (video.paused) {
           video.play().catch(() => {});
         }
       }
     }, 10000);
 
     return () => clearInterval(syncInterval);
-  }, [videoLoaded, userInteracted]);
+  }, [videoLoaded]);
 
   // Handle manual play (for autoplay restrictions)
   const handlePlayClick = () => {
@@ -198,10 +203,8 @@ const PhainonShrine = () => {
   // Handle user click to enable autoplay
   const handleInteraction = () => {
     const video = videoRef.current;
-    if (video && !userInteracted) {
-      video.play().then(() => {
-        setUserInteracted(true);
-      });
+    if (video && video.paused) {
+      video.play();
     }
   };
 
@@ -234,18 +237,6 @@ const PhainonShrine = () => {
         </div>
       )}
 
-      {/* Autoplay prompt overlay */}
-      {videoFullyLoaded && !userInteracted && (
-        <div className="fixed inset-0 bg-black/80 z-40 flex items-center justify-center">
-          <div className="border border-green-400 p-8 bg-black">
-            <div className="text-center mb-4">
-              <div className="text-xl mb-2">CLICK ANYWHERE TO START</div>
-              <div className="text-xs text-green-400/60">Browser requires user interaction for autoplay</div>
-            </div>
-          </div>
-        </div>
-      )}
-
       <div className="max-w-7xl mx-auto border border-green-400/30 p-4 md:p-6">
         
         {/* Header */}
@@ -260,7 +251,7 @@ const PhainonShrine = () => {
           <div className="border border-green-400/30 p-4">
             <div className="text-green-400/60 text-xs mb-2">RUNTIME</div>
             <div className="text-xl">{formatTime(elapsedSeconds)}</div>
-            <div className="text-xs text-green-400/60 mt-1">D:H:M:S</div>
+            <div className="text-xs text-green-400/60 mt-1">D:D:D:D:H:M:S</div>
           </div>
           
           <div className="border border-green-400/30 p-4">
@@ -303,7 +294,7 @@ const PhainonShrine = () => {
         {/* Video Player (visible, custom controls) */}
         <div className="border border-green-400/30 p-4 mb-4 md:mb-6">
           <div className="text-xs text-green-400/60 mb-2">PRIMARY_STREAM</div>
-          <div className="aspect-video bg-black border border-green-400/20 relative group">
+          <div className="aspect-video bg-black border border-green-400/20 relative">
             <video
               ref={videoRef}
               className="w-full h-full"
@@ -314,23 +305,54 @@ const PhainonShrine = () => {
             >
               <source src="/phainon.mp4" type="video/mp4" />
             </video>
-            {/* Custom mute/unmute button */}
-            <button
-              onClick={(e) => {
-                e.stopPropagation();
-                const video = videoRef.current;
-                if (video) {
-                  video.muted = !video.muted;
-                  setIsMuted(video.muted);
-                }
-              }}
-              className="absolute bottom-4 right-4 bg-black/80 border border-green-400/50 px-3 py-2 text-xs hover:bg-green-400/10 transition-colors z-10"
-            >
-              {isMuted ? '🔇 UNMUTE' : '🔊 MUTE'}
-            </button>
+            
+            {/* Custom audio controls */}
+            <div className="absolute bottom-2 right-2 flex items-center gap-2 bg-black/90 border border-green-400/30 p-2">
+              <button
+                onClick={(e) => {
+                  e.stopPropagation();
+                  const video = videoRef.current;
+                  if (video) {
+                    video.muted = !video.muted;
+                    setIsMuted(video.muted);
+                  }
+                }}
+                className="text-xs text-green-400 hover:text-green-300 transition-colors w-12"
+              >
+                {isMuted ? '[MUTE]' : '[ON]'}
+              </button>
+              <input
+                type="range"
+                min="0"
+                max="100"
+                value={volume}
+                onChange={(e) => {
+                  e.stopPropagation();
+                  const video = videoRef.current;
+                  const newVolume = parseInt(e.target.value);
+                  setVolume(newVolume);
+                  if (video) {
+                    video.volume = newVolume / 100;
+                    if (newVolume > 0 && video.muted) {
+                      video.muted = false;
+                      setIsMuted(false);
+                    }
+                  }
+                }}
+                className="w-20 h-1 bg-green-400/20 accent-green-400 cursor-pointer"
+                style={{
+                  background: `linear-gradient(to right, #22c55e ${volume}%, rgba(34, 197, 94, 0.2) ${volume}%)`
+                }}
+              />
+              <span className="text-xs text-green-400/60 w-8">{volume}%</span>
+            </div>
           </div>
-          <div className="text-xs text-green-400/40 mt-2 animate-pulse">
-            ⟳ FETCHING SOURCE FROM: <a href="https://www.youtube.com/watch?v=xQbetWZS-zs" target="_blank" rel="noopener noreferrer" className="hover:text-green-400 transition-colors underline">Honkai: Star Rail - "Kindling" Animated Short</a>
+          <div className="text-xs text-green-400/60 mt-2 flex items-center gap-2">
+            <span className="animate-spin inline-block">{spinnerFrames[spinnerIndex]}</span>
+            <span>FETCHING SOURCE FROM:</span>
+            <a href="https://www.youtube.com/watch?v=xQbetWZS-zs" target="_blank" rel="noopener noreferrer" className="text-green-400 hover:text-green-300 transition-colors underline">
+              Honkai: Star Rail - "Kindling" Animated Short
+            </a>
           </div>
         </div>
 
@@ -356,14 +378,8 @@ const PhainonShrine = () => {
         </div>
 
         {/* Footer */}
-        <div className="border-t border-green-400/30 mt-4 md:mt-6 pt-4 text-xs text-green-400/60">
-          <div className="text-center mb-2">SYSTEM OPERATIONAL | TIME_SYNC: ACTIVE | AUTO_INCREMENT: ENABLED</div>
-          <div className="text-center text-green-400/40 mt-3 animate-pulse">
-            SOURCE: <a href="https://www.youtube.com/watch?v=xQbetWZS-zs" target="_blank" rel="noopener noreferrer" className="hover:text-green-400 transition-colors">Honkai: Star Rail - "Kindling" Animated Short</a>
-          </div>
-          <div className="text-center text-green-400/40 text-[10px] mt-1">
-            © HoYoverse - Fan Project
-          </div>
+        <div className="border-t border-green-400/30 mt-4 md:mt-6 pt-4 text-xs text-green-400/60 text-center">
+          <div>SYSTEM OPERATIONAL | TIME_SYNC: ACTIVE | AUTO_INCREMENT: ENABLED</div>
         </div>
       </div>
     </div>
