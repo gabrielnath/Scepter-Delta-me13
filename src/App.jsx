@@ -20,7 +20,8 @@ const PhainonShrine = () => {
   const intervalRef = useRef(null);
   const animationRef = useRef(null);
 
-  const spinnerFrames = ['/', '-', '\\', '|'];
+  // const spinnerFrames = ['/', '-', '\\', '|'];
+  const spinnerFrames = ['⠋', '⠙', '⠹', '⠸', '⠼', '⠴', '⠦', '⠧', '⠇', '⠏'];
 
   // Calculate elapsed time and stats
   const elapsedSeconds = Math.max(0, Math.floor((currentTime - START_TIME) / 1000));
