@@ -1,151 +1,183 @@
-import React, { useState, useEffect, useRef } from "react";
+import React, { useState, useEffect, useRef } from 'react';
 
 const PhainonShrine = () => {
-  const START_TIME = new Date("2025-10-12T23:30:00+07:00").getTime();
-  const VIDEO_DURATION = 288;
-  const GRID_COLS = 10;
-  const GRID_ROWS = 10;
-  const GRID_SIZE = GRID_COLS * GRID_ROWS;
-  const CELL_SIZE = 120; // can adjust for your layout
+  // Hardcoded start: Oct 12, 2025, 11:30 PM GMT+7
+  const START_TIME = new Date('2025-10-12T23:30:00+07:00').getTime();
+  const VIDEO_DURATION = 288; // 4:48 in seconds
+  const GRID_SIZE = 36; // Reduced for performance
   const GOAL = 33550336;
-
+  
   const [currentTime, setCurrentTime] = useState(Date.now());
   const [isPlaying, setIsPlaying] = useState(false);
   const [videoLoaded, setVideoLoaded] = useState(false);
-  const [canInteract, setCanInteract] = useState(false);
-
   const videoRef = useRef(null);
-  const canvasRef = useRef(null);
+  const gridCanvasRef = useRef(null);
+  const intervalRef = useRef(null);
   const animationRef = useRef(null);
 
-  // Calculate stats
+  // Calculate elapsed time and stats
   const elapsedSeconds = Math.max(0, Math.floor((currentTime - START_TIME) / 1000));
   const completedLoops = Math.floor(elapsedSeconds / VIDEO_DURATION);
   const currentVideoPosition = elapsedSeconds % VIDEO_DURATION;
   const totalCount = completedLoops * GRID_SIZE;
   const progressPercent = ((totalCount / GOAL) * 100).toFixed(4);
 
-  // Formatting helpers
+  // Format time display
   const formatTime = (seconds) => {
     const days = Math.floor(seconds / 86400);
     const hours = Math.floor((seconds % 86400) / 3600);
     const mins = Math.floor((seconds % 3600) / 60);
     const secs = seconds % 60;
-    return `${days.toString().padStart(3, "0")}:${hours.toString().padStart(2, "0")}:${mins.toString().padStart(2, "0")}:${secs.toString().padStart(2, "0")}`;
+    return `${days.toString().padStart(3, '0')}:${hours.toString().padStart(2, '0')}:${mins.toString().padStart(2, '0')}:${secs.toString().padStart(2, '0')}`;
   };
+
   const formatVideoTime = (seconds) => {
     const mins = Math.floor(seconds / 60);
     const secs = seconds % 60;
-    return `${mins}:${secs.toString().padStart(2, "0")}`;
+    return `${mins}:${secs.toString().padStart(2, '0')}`;
   };
 
-  // Update stats once per second
+  // Update current time every second
   useEffect(() => {
-    const interval = setInterval(() => setCurrentTime(Date.now()), 1000);
-    return () => clearInterval(interval);
+    intervalRef.current = setInterval(() => {
+      setCurrentTime(Date.now());
+    }, 1000);
+
+    return () => {
+      if (intervalRef.current) clearInterval(intervalRef.current);
+    };
   }, []);
 
-  // Video setup (wait until video fully loaded)
+  // Draw video to all 100 canvases
+  // Throttle drawing to 15 FPS
+  let lastDrawTime = 0;
+  const FPS = 15;
+  const GRID_COLS = 6;
+  const GRID_ROWS = 6;
+  const CELL_SIZE = 80;
+  const drawVideoFrames = (timestamp) => {
+    const video = videoRef.current;
+    const canvas = gridCanvasRef.current;
+    if (!video || !videoLoaded || !canvas) {
+      animationRef.current = requestAnimationFrame(drawVideoFrames);
+      return;
+    }
+
+    // Only draw if video is actually playing
+    if (video.paused || video.ended) {
+      animationRef.current = requestAnimationFrame(drawVideoFrames);
+      return;
+    }
+
+    if (!lastDrawTime || timestamp - lastDrawTime > 1000 / FPS) {
+      const ctx = canvas.getContext('2d', { willReadFrequently: false });
+      ctx.clearRect(0, 0, canvas.width, canvas.height);
+      for (let row = 0; row < GRID_ROWS; row++) {
+        for (let col = 0; col < GRID_COLS; col++) {
+          const x = col * CELL_SIZE;
+          const y = row * CELL_SIZE;
+          try {
+            ctx.drawImage(video, 0, 0, canvas.width, canvas.height, x, y, CELL_SIZE, CELL_SIZE);
+            ctx.fillStyle = 'rgba(34, 197, 94, 0.08)';
+            ctx.fillRect(x, y, CELL_SIZE, CELL_SIZE);
+            ctx.fillStyle = 'rgba(0, 0, 0, 0.7)';
+            ctx.fillRect(x, y, 30, 12);
+            ctx.fillStyle = '#22c55e';
+            ctx.font = '9px monospace';
+            ctx.fillText((row * GRID_COLS + col).toString().padStart(3, '0'), x + 2, y + 10);
+          } catch (e) {
+            ctx.fillStyle = '#1a1a1a';
+            ctx.fillRect(x, y, CELL_SIZE, CELL_SIZE);
+            ctx.fillStyle = '#22c55e';
+            ctx.font = '14px monospace';
+            ctx.textAlign = 'center';
+            ctx.fillText('ERROR', x + CELL_SIZE / 2, y + CELL_SIZE / 2);
+          }
+        }
+      }
+      lastDrawTime = timestamp;
+    }
+    animationRef.current = requestAnimationFrame(drawVideoFrames);
+  };
+
+  // Setup video element
   useEffect(() => {
     const video = videoRef.current;
     if (!video) return;
 
-    function onLoadedData() {
+    const handleLoadedData = () => {
+      console.log('Video loaded successfully');
       setVideoLoaded(true);
+      // Sync to current position
       video.currentTime = currentVideoPosition;
-      // Only allow play button when fully loaded
-      setCanInteract(true);
-    }
+    };
 
-    function onPlay() { setIsPlaying(true); }
-    function onPause() { setIsPlaying(false); }
+    const handlePlay = () => {
+      console.log('Video playing');
+      setIsPlaying(true);
+      if (!animationRef.current) {
+        drawVideoFrames();
+      }
+    };
 
-    video.addEventListener("loadeddata", onLoadedData);
-    video.addEventListener("play", onPlay);
-    video.addEventListener("pause", onPause);
+    const handlePause = () => {
+      console.log('Video paused');
+      setIsPlaying(false);
+    };
+
+    const handleCanPlay = () => {
+      console.log('Video can play');
+    };
+
+    video.addEventListener('loadeddata', handleLoadedData);
+    video.addEventListener('canplay', handleCanPlay);
+    video.addEventListener('play', handlePlay);
+    video.addEventListener('pause', handlePause);
+
+    // Try to load video
     video.load();
 
     return () => {
-      video.removeEventListener("loadeddata", onLoadedData);
-      video.removeEventListener("play", onPlay);
-      video.removeEventListener("pause", onPause);
-      if (animationRef.current) cancelAnimationFrame(animationRef.current);
+      video.removeEventListener('loadeddata', handleLoadedData);
+      video.removeEventListener('canplay', handleCanPlay);
+      video.removeEventListener('play', handlePlay);
+      video.removeEventListener('pause', handlePause);
+      if (animationRef.current) {
+        cancelAnimationFrame(animationRef.current);
+      }
     };
   }, [currentVideoPosition]);
 
-  // Sync video time every 10 seconds
+  // Sync video position every 10 seconds
   useEffect(() => {
     const syncInterval = setInterval(() => {
       const video = videoRef.current;
       if (video && videoLoaded) {
         const expectedPosition = (Date.now() - START_TIME) / 1000 % VIDEO_DURATION;
-        if (Math.abs(video.currentTime - expectedPosition) > 2) {
+        const currentPos = video.currentTime;
+        
+        // If drift is more than 2 seconds, resync
+        if (Math.abs(currentPos - expectedPosition) > 2) {
           video.currentTime = expectedPosition;
         }
       }
     }, 10000);
+
     return () => clearInterval(syncInterval);
   }, [videoLoaded]);
 
-  // Draw video to 100 grid cells on 1 canvas
-  useEffect(() => {
-    let stop = false;
-    function drawGrid() {
-      if (stop) return;
-      const video = videoRef.current;
-      const canvas = canvasRef.current;
-      if (!canvas || !video || !videoLoaded || !isPlaying) {
-        animationRef.current = requestAnimationFrame(drawGrid);
-        return;
-      }
-
-      const ctx = canvas.getContext("2d");
-      // Big clear
-      ctx.clearRect(0, 0, canvas.width, canvas.height);
-
-      for (let row = 0; row < GRID_ROWS; row++) {
-        for (let col = 0; col < GRID_COLS; col++) {
-          const idx = row * GRID_COLS + col;
-          const x = col * CELL_SIZE;
-          const y = row * CELL_SIZE;
-          // Draw scaled video frame
-          ctx.drawImage(video, 0, 0, video.videoWidth, video.videoHeight,
-            x, y, CELL_SIZE, CELL_SIZE);
-
-          // Overlay tint
-          ctx.save();
-          ctx.fillStyle = "rgba(34,197,94,.08)";
-          ctx.fillRect(x, y, CELL_SIZE, CELL_SIZE);
-
-          // Overlay box & ID
-          ctx.fillStyle = "rgba(0,0,0,0.7)";
-          ctx.fillRect(x, y, 30, 12);
-          ctx.fillStyle = "#22c55e";
-          ctx.font = "9px monospace";
-          ctx.textAlign = "start";
-          ctx.textBaseline = "top";
-          ctx.fillText(idx.toString().padStart(3, "0"), x + 2, y + 2);
-          ctx.restore();
-        }
-      }
-      animationRef.current = requestAnimationFrame(drawGrid);
-    }
-
-    animationRef.current = requestAnimationFrame(drawGrid);
-    return () => {
-      stop = true;
-      if (animationRef.current) cancelAnimationFrame(animationRef.current);
-    };
-  }, [videoLoaded, isPlaying]);
-
-  // Play button, only active after video 100% loaded
+  // Handle manual play (for autoplay restrictions)
   const handlePlayClick = () => {
-    if (canInteract && videoRef.current) videoRef.current.play();
+    const video = videoRef.current;
+    if (video) {
+      video.play();
+    }
   };
 
   return (
     <div className="min-h-screen bg-black text-green-400 font-mono p-4 md:p-8">
       <div className="max-w-7xl mx-auto border border-green-400/30 p-4 md:p-6">
+        
         {/* Header */}
         <div className="border-b border-green-400/30 pb-3 md:pb-4 mb-4 md:mb-6">
           <div className="text-xs text-green-400/60 mb-1">SYSTEM_ID: PHAINON_FUNCTION_MONITOR_v1.0</div>
@@ -160,11 +192,13 @@ const PhainonShrine = () => {
             <div className="text-xl">{formatTime(elapsedSeconds)}</div>
             <div className="text-xs text-green-400/60 mt-1">D:H:M:S</div>
           </div>
+          
           <div className="border border-green-400/30 p-4">
             <div className="text-green-400/60 text-xs mb-2">EXECUTION_COUNT</div>
             <div className="text-xl">{totalCount.toLocaleString()}</div>
             <div className="text-xs text-green-400/60 mt-1">{progressPercent}% / TARGET: {GOAL.toLocaleString()}</div>
           </div>
+          
           <div className="border border-green-400/30 p-4">
             <div className="text-green-400/60 text-xs mb-2">CYCLE_POSITION</div>
             <div className="text-xl">{formatVideoTime(currentVideoPosition)} / 4:48</div>
@@ -197,10 +231,7 @@ const PhainonShrine = () => {
               {!isPlaying && (
                 <button 
                   onClick={handlePlayClick}
-                  disabled={!canInteract}
-                  className={`text-xs border border-green-400/50 px-3 py-1 transition-colors ${
-                    canInteract ? "hover:bg-green-400/10" : "cursor-not-allowed opacity-50"
-                  }`}
+                  className="text-xs border border-green-400/50 px-3 py-1 hover:bg-green-400/10 transition-colors"
                 >
                   START
                 </button>
@@ -209,56 +240,52 @@ const PhainonShrine = () => {
           </div>
         </div>
 
-        {/* Video player (source only, not displayed) */}
-        <video
-          ref={videoRef}
-          className="hidden"
-          loop
-          playsInline
-          crossOrigin="anonymous"
-        >
-          <source src="/phainon.mp4" type="video/mp4" />
-        </video>
-        {!videoLoaded && (
-          <div className="text-xs text-yellow-400 mb-2 text-center">
-            LOADING VIDEO... (Make sure phainon.mp4 is in /public folder)
+        {/* Video Player (source for canvas) */}
+        <div className="border border-green-400/30 p-4 mb-4 md:mb-6">
+          <div className="text-xs text-green-400/60 mb-2">PRIMARY_STREAM</div>
+          <div className="aspect-video bg-black border border-green-400/20">
+            <video
+              ref={videoRef}
+              className="w-full h-full"
+              loop
+              playsInline
+              controls
+              crossOrigin="anonymous"
+            >
+              <source src="/phainon.mp4" type="video/mp4" />
+              Your browser does not support video playback.
+            </video>
           </div>
-        )}
+          {!videoLoaded && (
+            <div className="text-xs text-yellow-400 mt-2 text-center">
+              LOADING VIDEO... (Make sure phainon.mp4 is in /public folder)
+            </div>
+          )}
+          {videoLoaded && !isPlaying && (
+            <div className="text-xs text-yellow-400 mt-2 text-center">
+              Click PLAY on the video to start all 100 instances
+            </div>
+          )}
+        </div>
 
-        {/* Single master canvas grid (10x10) */}
+        {/* Grid of 100 Instances */}
         <div className="border border-green-400/30 p-4">
-          <div className="text-xs text-green-400/60 mb-3">PARALLEL_INSTANCES [100x] - LIVE FEED</div>
-          <div
-            style={{
-              width: GRID_COLS * CELL_SIZE,
-              height: GRID_ROWS * CELL_SIZE,
-              border: "1px solid #22c55e40",
-              maxWidth: "100%",
-              margin: "0 auto"
-            }}
-          >
+          <div className="text-xs text-green-400/60 mb-3">PARALLEL_INSTANCES [36x] - LIVE FEED (Single Canvas)</div>
+          <div className="flex justify-center">
             <canvas
-              ref={canvasRef}
+              ref={gridCanvasRef}
               width={GRID_COLS * CELL_SIZE}
               height={GRID_ROWS * CELL_SIZE}
-              style={{
-                width: "100%",
-                height: "auto",
-                display: "block"
-              }}
-              tabIndex={-1}
+              className="border border-green-400/30 bg-black"
+              style={{ width: GRID_COLS * CELL_SIZE, height: GRID_ROWS * CELL_SIZE }}
             />
           </div>
-          <div className="text-xs text-green-400/60 mt-3">
-            MULTIPLIER: x100 per cycle | STREAM: SYNCHRONIZED
-          </div>
+          <div className="text-xs text-green-400/60 mt-3">MULTIPLIER: x36 per cycle | STREAM: SYNCHRONIZED</div>
         </div>
 
         {/* Footer */}
         <div className="border-t border-green-400/30 mt-4 md:mt-6 pt-4 text-xs text-green-400/60 text-center">
-          <div className="break-words">
-            SYSTEM OPERATIONAL | TIME_SYNC: ACTIVE | AUTO_INCREMENT: ENABLED
-          </div>
+          <div className="break-words">SYSTEM OPERATIONAL | TIME_SYNC: ACTIVE | AUTO_INCREMENT: ENABLED</div>
         </div>
       </div>
     </div>
