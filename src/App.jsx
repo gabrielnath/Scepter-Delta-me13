@@ -30,7 +30,7 @@ const PhainonShrine = () => {
   const totalCount = completedLoops * GRID_SIZE;
   const progressPercent = ((totalCount / GOAL) * 100).toFixed(4);
 
-  // Format time display with 4 digits for days
+  // Format time display
   const formatTime = (seconds) => {
     const days = Math.floor(seconds / 86400);
     const hours = Math.floor((seconds % 86400) / 3600);
@@ -45,12 +45,12 @@ const PhainonShrine = () => {
     return `${mins}:${secs.toString().padStart(2, '0')}`;
   };
 
-  // Update current time every 200 miliseconds
+  // Update current time every 80 miliseconds
   useEffect(() => {
     intervalRef.current = setInterval(() => {
       setCurrentTime(Date.now());
       setSpinnerIndex(prev => (prev + 1) % spinnerFrames.length);
-    }, 200);
+    }, 80);
 
     return () => {
       if (intervalRef.current) clearInterval(intervalRef.current);
@@ -58,6 +58,10 @@ const PhainonShrine = () => {
   }, []);
 
   // Draw video to all 100 canvases - simplified version
+  // Draws the video to all 100 canvases efficiently.
+  // Uses a single requestAnimationFrame for smooth 60fps updates.
+  // Checks if the video is ready before drawing to avoid desync and performance issues.
+  // Took some effort to optimize, but it now works very reliably...phew.
   const drawVideoFrames = () => {
     const video = videoRef.current;
     
@@ -85,7 +89,7 @@ const PhainonShrine = () => {
       ctx.fillRect(0, 0, 35, 15);
       ctx.fillStyle = '#22c55e';
       ctx.font = 'bold 11px monospace';
-      ctx.fillText(index.toString().padStart(3, '0'), 3, 12);
+      ctx.fillText(index.toString().padStart(3, '0'), 3, 12); // Instance ID
     });
 
     animationRef.current = requestAnimationFrame(drawVideoFrames);
@@ -112,7 +116,7 @@ const PhainonShrine = () => {
       video.volume = 1.0;
       setIsMuted(true);
       setVolume(100);
-      // Auto-start playing (muted, no interaction needed)
+      // Auto-start playing (muted)
       video.play().then(() => {
         console.log('Autoplay successful');
       }).catch((e) => {
@@ -183,7 +187,7 @@ const PhainonShrine = () => {
           video.currentTime = expectedPosition;
         }
         
-        // Auto-restart if paused (to keep sync)
+        // Auto-restart if paused (to keep sync) -- in case autoplay was interrupted
         if (video.paused) {
           video.play().catch(() => {});
         }
@@ -193,7 +197,7 @@ const PhainonShrine = () => {
     return () => clearInterval(syncInterval);
   }, [videoLoaded]);
 
-  // Handle manual play (for autoplay restrictions)
+  // Handle manual play (for autoplay restrictions) -- not used currently
   const handlePlayClick = () => {
     const video = videoRef.current;
     if (video) {
@@ -263,7 +267,7 @@ const PhainonShrine = () => {
           
           <div className="border border-green-400/30 p-4">
             <div className="text-green-400/60 text-xs mb-2">CYCLE_POSITION</div>
-            <div className="text-xl">{formatVideoTime(currentVideoPosition)} / 4:48</div>
+            <div className="text-xl">{formatVideoTime(currentVideoPosition)} / 4:47</div>
             <div className="text-xs text-green-400/60 mt-1">LOOP_#{completedLoops.toLocaleString()}</div>
           </div>
         </div>
@@ -296,9 +300,9 @@ const PhainonShrine = () => {
         <div className="border border-green-400/30 p-3 mb-4 md:mb-6">
           <div className="text-xs text-green-400/60 flex items-center gap-2">
             <span className="inline-block w-3 font-[ui-monospace,monospace] tracking-tight">{spinnerFrames[spinnerIndex]}</span>
-            <span>FETCH:</span>
+            <span>FETCHING DATA:</span>
             <a href="https://www.youtube.com/watch?v=xQbetWZS-zs" target="_blank" rel="noopener noreferrer" className="text-green-400 hover:text-green-300 transition-colors underline truncate">
-              Honkai: Star Rail - "Kindling" Animated Short
+              Honkai: Star Rail - Animated Short "Hark! There's Revelry Atop the Divine Mountain"
             </a>
           </div>
         </div>
