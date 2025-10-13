@@ -12,6 +12,7 @@ const PhainonShrine = () => {
   const [videoLoaded, setVideoLoaded] = useState(false);
   const [videoFullyLoaded, setVideoFullyLoaded] = useState(false);
   const [loadProgress, setLoadProgress] = useState(0);
+  const [userInteracted, setUserInteracted] = useState(false);
   const videoRef = useRef(null);
   const canvasRefs = useRef([]);
   const intervalRef = useRef(null);
@@ -101,6 +102,13 @@ const PhainonShrine = () => {
       if (video.currentTime === 0) {
         video.currentTime = currentVideoPosition;
       }
+      // Try to autoplay
+      video.play().then(() => {
+        console.log('Autoplay successful');
+        setUserInteracted(true);
+      }).catch((e) => {
+        console.log('Autoplay blocked - user interaction required');
+      });
     };
 
     const handleProgress = () => {
@@ -159,11 +167,16 @@ const PhainonShrine = () => {
         if (Math.abs(currentPos - expectedPosition) > 2) {
           video.currentTime = expectedPosition;
         }
+        
+        // Auto-restart if paused (to keep sync)
+        if (video.paused && userInteracted) {
+          video.play().catch(() => {});
+        }
       }
     }, 10000);
 
     return () => clearInterval(syncInterval);
-  }, [videoLoaded]);
+  }, [videoLoaded, userInteracted]);
 
   // Handle manual play (for autoplay restrictions)
   const handlePlayClick = () => {
@@ -173,8 +186,18 @@ const PhainonShrine = () => {
     }
   };
 
+  // Handle user click to enable autoplay
+  const handleInteraction = () => {
+    const video = videoRef.current;
+    if (video && !userInteracted) {
+      video.play().then(() => {
+        setUserInteracted(true);
+      });
+    }
+  };
+
   return (
-    <div className="min-h-screen bg-black text-green-400 font-mono p-4 md:p-8">
+    <div className="min-h-screen bg-black text-green-400 font-mono p-4 md:p-8" onClick={handleInteraction}>
       {/* Loading Screen */}
       {!videoFullyLoaded && (
         <div className="fixed inset-0 bg-black z-50 flex items-center justify-center">
@@ -197,6 +220,18 @@ const PhainonShrine = () => {
             </div>
             <div className="text-xs text-green-400/60 text-center">
               {loadProgress < 100 ? 'Please wait...' : 'Ready! Starting system...'}
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* Autoplay prompt overlay */}
+      {videoFullyLoaded && !userInteracted && (
+        <div className="fixed inset-0 bg-black/80 z-40 flex items-center justify-center">
+          <div className="border border-green-400 p-8 bg-black">
+            <div className="text-center mb-4">
+              <div className="text-xl mb-2">CLICK ANYWHERE TO START</div>
+              <div className="text-xs text-green-400/60">Browser requires user interaction for autoplay</div>
             </div>
           </div>
         </div>
@@ -256,32 +291,16 @@ const PhainonShrine = () => {
           </div>
         </div>
 
-        {/* Video Player (source for canvas) */}
-        <div className="border border-green-400/30 p-4 mb-4 md:mb-6">
-          <div className="text-xs text-green-400/60 mb-2">PRIMARY_STREAM</div>
-          <div className="aspect-video bg-black border border-green-400/20">
-            <video
-              ref={videoRef}
-              className="w-full h-full"
-              loop
-              playsInline
-              controls
-              preload="auto"
-            >
-              <source src="/phainon.mp4" type="video/mp4" />
-              Your browser does not support video playback.
-            </video>
-          </div>
-          {!videoLoaded && (
-            <div className="text-xs text-yellow-400 mt-2 text-center">
-              LOADING VIDEO... (Make sure phainon.mp4 is in /public folder)
-            </div>
-          )}
-          {videoLoaded && !isPlaying && (
-            <div className="text-xs text-yellow-400 mt-2 text-center">
-              Click PLAY on the video to start all 100 instances
-            </div>
-          )}
+        {/* Video Player (hidden, no controls) */}
+        <div className="hidden">
+          <video
+            ref={videoRef}
+            loop
+            playsInline
+            preload="auto"
+          >
+            <source src="/phainon.mp4" type="video/mp4" />
+          </video>
         </div>
 
         {/* Grid of 100 Instances */}
