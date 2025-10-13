@@ -45,12 +45,12 @@ const PhainonShrine = () => {
     return `${mins}:${secs.toString().padStart(2, '0')}`;
   };
 
-  // Update current time every second
+  // Update current time every 200 miliseconds
   useEffect(() => {
     intervalRef.current = setInterval(() => {
       setCurrentTime(Date.now());
-      setSpinnerIndex(prev => (prev + 1) % 4);
-    }, 1000);
+      setSpinnerIndex(prev => (prev + 1) % spinnerFrames.length);
+    }, 200);
 
     return () => {
       if (intervalRef.current) clearInterval(intervalRef.current);
@@ -242,8 +242,8 @@ const PhainonShrine = () => {
         
         {/* Header */}
         <div className="border-b border-green-400/30 pb-3 md:pb-4 mb-4 md:mb-6">
-          <div className="text-xs text-green-400/60 mb-1">SYSTEM_ID: PHAINON_FUNCTION_MONITOR_v1.0</div>
-          <h1 className="text-xl md:text-2xl">FUNCTION EXECUTION TRACKER</h1>
+          <div className="text-xs text-green-400/60 mb-1">SYSTEM_ID: NeiKos496</div>
+          <h1 className="text-xl md:text-2xl">Scepter δ-me13</h1>
           <div className="text-xs text-green-400/60 mt-1">INIT: 2025-10-12T23:30:00+07:00</div>
         </div>
 
@@ -256,7 +256,7 @@ const PhainonShrine = () => {
           </div>
           
           <div className="border border-green-400/30 p-4">
-            <div className="text-green-400/60 text-xs mb-2">EXECUTION_COUNT</div>
+            <div className="text-green-400/60 text-xs mb-2">CYCLE_COUNT</div>
             <div className="text-xl">{totalCount.toLocaleString()}</div>
             <div className="text-xs text-green-400/60 mt-1">{progressPercent}% / TARGET: {GOAL.toLocaleString()}</div>
           </div>
@@ -264,7 +264,7 @@ const PhainonShrine = () => {
           <div className="border border-green-400/30 p-4">
             <div className="text-green-400/60 text-xs mb-2">CYCLE_POSITION</div>
             <div className="text-xl">{formatVideoTime(currentVideoPosition)} / 4:48</div>
-            <div className="text-xs text-green-400/60 mt-1">LOOP_#{(completedLoops*100).toLocaleString()}</div>
+            <div className="text-xs text-green-400/60 mt-1">LOOP_#{completedLoops.toLocaleString()}</div>
           </div>
         </div>
 
