@@ -111,11 +111,11 @@ const PhainonShrine = () => {
       // Set initial position and muted state
       if (video.currentTime === 0) {
         video.currentTime = currentVideoPosition;
+        video.muted = true;
+        video.volume = 1.0;
+        setIsMuted(true);
+        setVolume(100);
       }
-      video.muted = true;
-      video.volume = 1.0;
-      setIsMuted(true);
-      setVolume(100);
       // Auto-start playing (muted)
       video.play().then(() => {
         console.log('Autoplay successful');
