@@ -291,7 +291,7 @@ const PhainonShrine = () => {
           </div>
         </div>
 
-        {/* Video Player (visible, custom controls) */}
+        {/* Video Player (visible, no overlays) */}
         <div className="border border-green-400/30 p-4 mb-4 md:mb-6">
           <div className="text-xs text-green-400/60 mb-2">PRIMARY_STREAM</div>
           <div className="aspect-video bg-black border border-green-400/20 relative">
@@ -305,9 +305,22 @@ const PhainonShrine = () => {
             >
               <source src="/phainon.mp4" type="video/mp4" />
             </video>
+          </div>
+          
+          {/* Control Panel - Below Video */}
+          <div className="border-t border-green-400/30 mt-3 pt-3 grid grid-cols-1 md:grid-cols-2 gap-3">
+            {/* Left: Fetching Status */}
+            <div className="text-xs text-green-400/60 flex items-center gap-2">
+              <span>{spinnerFrames[spinnerIndex]}</span>
+              <span>FETCH:</span>
+              <a href="https://www.youtube.com/watch?v=xQbetWZS-zs" target="_blank" rel="noopener noreferrer" className="text-green-400 hover:text-green-300 transition-colors underline">
+                Honkai: Star Rail - "Kindling"
+              </a>
+            </div>
             
-            {/* Custom audio controls */}
-            <div className="absolute bottom-2 right-2 flex items-center gap-2 bg-black/90 border border-green-400/30 p-2">
+            {/* Right: Audio Controls */}
+            <div className="flex items-center gap-3 md:justify-end">
+              <span className="text-xs text-green-400/60">AUDIO:</span>
               <button
                 onClick={(e) => {
                   e.stopPropagation();
@@ -317,7 +330,7 @@ const PhainonShrine = () => {
                     setIsMuted(video.muted);
                   }
                 }}
-                className="text-xs text-green-400 hover:text-green-300 transition-colors w-12"
+                className="text-xs text-green-400 hover:text-green-300 transition-colors border border-green-400/30 px-2 py-1"
               >
                 {isMuted ? '[MUTE]' : '[ON]'}
               </button>
@@ -339,20 +352,13 @@ const PhainonShrine = () => {
                     }
                   }
                 }}
-                className="w-20 h-1 bg-green-400/20 accent-green-400 cursor-pointer"
+                className="w-24 h-1 bg-green-400/20 accent-green-400 cursor-pointer"
                 style={{
                   background: `linear-gradient(to right, #22c55e ${volume}%, rgba(34, 197, 94, 0.2) ${volume}%)`
                 }}
               />
               <span className="text-xs text-green-400/60 w-8">{volume}%</span>
             </div>
-          </div>
-          <div className="text-xs text-green-400/60 mt-2 flex items-center gap-2">
-            <span className="animate-spin inline-block">{spinnerFrames[spinnerIndex]}</span>
-            <span>FETCHING SOURCE FROM:</span>
-            <a href="https://www.youtube.com/watch?v=xQbetWZS-zs" target="_blank" rel="noopener noreferrer" className="text-green-400 hover:text-green-300 transition-colors underline">
-              Honkai: Star Rail - "Kindling" Animated Short
-            </a>
           </div>
         </div>
 
