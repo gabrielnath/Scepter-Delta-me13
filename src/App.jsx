@@ -3,13 +3,15 @@ import React, { useState, useEffect, useRef } from 'react';
 const PhainonShrine = () => {
   // Hardcoded start: Oct 12, 2025, 11:30 PM GMT+7
   const START_TIME = new Date('2025-10-12T23:30:00+07:00').getTime();
-  const VIDEO_DURATION = 288; // 4:48 in seconds
+  const VIDEO_DURATION = 287; // 4:47 in seconds
   const GRID_SIZE = 100;
   const GOAL = 33550336;
   
   const [currentTime, setCurrentTime] = useState(Date.now());
   const [isPlaying, setIsPlaying] = useState(false);
   const [videoLoaded, setVideoLoaded] = useState(false);
+  const [videoFullyLoaded, setVideoFullyLoaded] = useState(false);
+  const [loadProgress, setLoadProgress] = useState(0);
   const videoRef = useRef(null);
   const canvasRefs = useRef([]);
   const intervalRef = useRef(null);
@@ -51,28 +53,60 @@ const PhainonShrine = () => {
   // Draw video to all 100 canvases
   const drawVideoFrames = () => {
     const video = videoRef.current;
-    if (!video || video.paused || video.ended || !videoLoaded) {
+    if (!video || !videoLoaded) {
       animationRef.current = requestAnimationFrame(drawVideoFrames);
       return;
     }
 
-    canvasRefs.current.forEach((canvas) => {
+    if (video.paused || video.ended || video.readyState < 2) {
+      animationRef.current = requestAnimationFrame(drawVideoFrames);
+      return;
+    }
+
+    let successCount = 0;
+    let errorCount = 0;
+
+    canvasRefs.current.forEach((canvas, index) => {
       if (canvas) {
-        const ctx = canvas.getContext('2d');
+        const ctx = canvas.getContext('2d', { willReadFrequently: false });
         try {
-          // Draw video frame to canvas
+          // Clear canvas first
+          ctx.clearRect(0, 0, canvas.width, canvas.height);
+          
+          // Draw video frame
           ctx.drawImage(video, 0, 0, canvas.width, canvas.height);
           
-          // Add green tint overlay for terminal aesthetic
-          ctx.fillStyle = 'rgba(34, 197, 94, 0.1)';
+          // Add green tint
+          ctx.fillStyle = 'rgba(34, 197, 94, 0.08)';
           ctx.fillRect(0, 0, canvas.width, canvas.height);
+          
+          // Instance ID
+          ctx.fillStyle = 'rgba(0, 0, 0, 0.8)';
+          ctx.fillRect(0, 0, 35, 14);
+          ctx.fillStyle = '#22c55e';
+          ctx.font = 'bold 10px monospace';
+          ctx.fillText(index.toString().padStart(3, '0'), 3, 11);
+          
+          successCount++;
         } catch (e) {
-          // Fallback if drawing fails
+          errorCount++;
+          // Show error state
           ctx.fillStyle = '#000000';
           ctx.fillRect(0, 0, canvas.width, canvas.height);
+          ctx.strokeStyle = '#ff0000';
+          ctx.strokeRect(0, 0, canvas.width, canvas.height);
+          ctx.fillStyle = '#ff0000';
+          ctx.font = '10px monospace';
+          ctx.textAlign = 'center';
+          ctx.fillText('ERR', canvas.width / 2, canvas.height / 2);
         }
       }
     });
+
+    // Log drawing status every 60 frames
+    if (Math.random() < 0.016) {
+      console.log(`Drawing: ${successCount} success, ${errorCount} errors`);
+    }
 
     animationRef.current = requestAnimationFrame(drawVideoFrames);
   };
@@ -83,18 +117,29 @@ const PhainonShrine = () => {
     if (!video) return;
 
     const handleLoadedData = () => {
+      console.log('Video metadata loaded');
       setVideoLoaded(true);
-      // Sync to current position
       video.currentTime = currentVideoPosition;
-      video.play().then(() => {
-        setIsPlaying(true);
-        drawVideoFrames();
-      }).catch((e) => {
-        console.log('Autoplay blocked, user interaction needed');
-      });
+    };
+
+    const handleCanPlayThrough = () => {
+      console.log('Video fully loaded and can play through');
+      setVideoFullyLoaded(true);
+    };
+
+    const handleProgress = () => {
+      if (video.buffered.length > 0) {
+        const bufferedEnd = video.buffered.end(video.buffered.length - 1);
+        const duration = video.duration;
+        if (duration > 0) {
+          const percent = (bufferedEnd / duration) * 100;
+          setLoadProgress(Math.round(percent));
+        }
+      }
     };
 
     const handlePlay = () => {
+      console.log('Video playing - starting canvas draw');
       setIsPlaying(true);
       if (!animationRef.current) {
         drawVideoFrames();
@@ -102,22 +147,29 @@ const PhainonShrine = () => {
     };
 
     const handlePause = () => {
+      console.log('Video paused');
       setIsPlaying(false);
     };
 
     video.addEventListener('loadeddata', handleLoadedData);
+    video.addEventListener('canplaythrough', handleCanPlayThrough);
+    video.addEventListener('progress', handleProgress);
     video.addEventListener('play', handlePlay);
     video.addEventListener('pause', handlePause);
 
+    video.load();
+
     return () => {
       video.removeEventListener('loadeddata', handleLoadedData);
+      video.removeEventListener('canplaythrough', handleCanPlayThrough);
+      video.removeEventListener('progress', handleProgress);
       video.removeEventListener('play', handlePlay);
       video.removeEventListener('pause', handlePause);
       if (animationRef.current) {
         cancelAnimationFrame(animationRef.current);
       }
     };
-  }, []);
+  }, [currentVideoPosition]);
 
   // Sync video position every 10 seconds
   useEffect(() => {
@@ -147,6 +199,33 @@ const PhainonShrine = () => {
 
   return (
     <div className="min-h-screen bg-black text-green-400 font-mono p-4 md:p-8">
+      {/* Loading Screen */}
+      {!videoFullyLoaded && (
+        <div className="fixed inset-0 bg-black z-50 flex items-center justify-center">
+          <div className="border border-green-400/30 p-8 max-w-md w-full mx-4">
+            <div className="text-center mb-6">
+              <div className="text-2xl mb-2">PHAINON FUNCTION</div>
+              <div className="text-xs text-green-400/60">INITIALIZING SYSTEM...</div>
+            </div>
+            <div className="mb-4">
+              <div className="flex justify-between text-xs mb-2">
+                <span>LOADING VIDEO DATA</span>
+                <span>{loadProgress}%</span>
+              </div>
+              <div className="w-full bg-green-400/10 h-4 border border-green-400/30">
+                <div 
+                  className="h-full bg-green-400/50 transition-all duration-300"
+                  style={{ width: `${loadProgress}%` }}
+                />
+              </div>
+            </div>
+            <div className="text-xs text-green-400/60 text-center">
+              {loadProgress < 100 ? 'Please wait...' : 'Ready! Starting system...'}
+            </div>
+          </div>
+        </div>
+      )}
+
       <div className="max-w-7xl mx-auto border border-green-400/30 p-4 md:p-6">
         
         {/* Header */}
@@ -250,13 +329,10 @@ const PhainonShrine = () => {
               >
                 <canvas
                   ref={el => canvasRefs.current[i] = el}
-                  width="120"
-                  height="120"
+                  width="160"
+                  height="160"
                   className="w-full h-full"
                 />
-                <div className="absolute top-0 left-0 text-[8px] text-green-400 bg-black/80 px-1">
-                  {i.toString().padStart(3, '0')}
-                </div>
               </div>
             ))}
           </div>
