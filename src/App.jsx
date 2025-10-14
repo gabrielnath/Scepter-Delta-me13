@@ -33,7 +33,6 @@ const PhainonShrine = () => {
   const observerRef = useRef(null);
   const offscreenCanvasRef = useRef(null);
 
-  // const spinnerFrames = ['/', '-', '\\', '|'];
   const spinnerFrames = ['⠋', '⠙', '⠹', '⠸', '⠼', '⠴', '⠦', '⠧', '⠇', '⠏'];
 
   // Detect if mobile device (for performance optimization)
@@ -75,11 +74,7 @@ const PhainonShrine = () => {
     };
   }, []);
 
-  // Draw video to all 100 canvases - simplified version
-  // Draws the video to all 100 canvases efficiently.
-  // Uses a single requestAnimationFrame for smooth 60fps updates.
-  // Checks if the video is ready before drawing to avoid desync and performance issues.
-  // Took some effort to optimize, but it now works very reliably...phew.
+  // Draw video to all 100 canvases - optimized version
   const drawVideoFrames = () => {
     const video = videoRef.current;
     const offscreenCanvas = offscreenCanvasRef.current;
@@ -105,15 +100,7 @@ const PhainonShrine = () => {
       
       const ctx = canvas.getContext('2d');
       
-      // OLD CODE:
-      // Draw the video frame
-      // ctx.drawImage(video, 0, 0, canvas.width, canvas.height);
-
-      // Add green tint
-      // ctx.fillStyle = 'rgba(34, 197, 94, 0.1)';
-      // ctx.fillRect(0, 0, canvas.width, canvas.height);
-
-      // NEW CODE: draw from offscreen canvas (fast copy to all canvases)
+      // Draw from offscreen canvas (fast copy to all canvases)
       ctx.drawImage(offscreenCanvas, 0, 0, canvas.width, canvas.height);
       
       // Add instance ID
@@ -123,8 +110,6 @@ const PhainonShrine = () => {
       ctx.font = 'bold 11px monospace';
       ctx.fillText(index.toString().padStart(3, '0'), 3, 12); // Instance ID
     });
-
-    // animationRef.current = requestAnimationFrame(drawVideoFrames);
 
     // Mobile optimization - throttle frame rate
     const delay = 1000 / canvasFPS;
@@ -163,68 +148,68 @@ const PhainonShrine = () => {
       });
     };
 
-    // Handler for when the primary video loops
+    // --- CONSOLIDATED AND CORRECTED TIME SYNC LOGIC ---
     const handleTimeUpdate = () => {
       const video = videoRef.current;
       const secondaryVideo = secondaryVideoRef.current;
 
-      if (!video || !secondaryVideo) return;
+      if (!video || !secondaryVideo || video.readyState < 1 || secondaryVideo.readyState < 1) return;
 
       const primaryTime = video.currentTime;
+      const secondaryShouldBePlaying = primaryTime < SECONDARY_VIDEO_DURATION;
 
-      // SECONDARY VIDEO STATE LOGIC
-      if (primaryTime >= SECONDARY_VIDEO_DURATION) {
-        // Condition: The primary video's time is beyond the secondary video's duration
-        if (!isSecondaryFinished) {
-          secondaryVideo.pause();
-          secondaryVideo.currentTime = 0;
-          setIsSecondaryFinished(true);
-          console.log('Secondary video finished, waiting for primary loop')
+      // === CONTINUOUS SYNCHRONIZATION (Master Sync) ===
+      if (secondaryVideo.readyState >= 3) {
+        // The secondary video's effective time is the primary time modulo its own duration.
+        const targetSecondaryTime = primaryTime % SECONDARY_VIDEO_DURATION; 
+        
+        const timeDifference = Math.abs(secondaryVideo.currentTime - targetSecondaryTime);
+
+        // Only seek if the difference is more than 0.2s (to prevent excessive seeking/flickering)
+        if (timeDifference > 0.2) {
+          secondaryVideo.currentTime = targetSecondaryTime;
         }
-      } else {
-        // Condition: The primary video's time is within the secondary video's duration
+      }
+
+      // === SECONDARY VIDEO STATE & PLAYBACK LOGIC ===
+      if (secondaryShouldBePlaying) {
+        // Case A: Primary is running and Secondary should be playing
         if (isSecondaryFinished) {
           setIsSecondaryFinished(false); // Hide the [WAITING...] overlay
         }
-      }
-
-      // CONTINUOUS SYNCHRONIZATION
-      // Sync secondary video to primary's current time
-      if (secondaryVideo.readyState >= 3) {
-        const timeDifference = Math.abs(secondaryVideo.currentTime - primaryTime);
-
-        if (timeDifference > 0.2) {
-          secondaryVideo.currentTime = primaryTime;
+        
+        // Sync play/pause state
+        if (video.paused && !secondaryVideo.paused) {
+          secondaryVideo.pause();
+        } else if (!video.paused && secondaryVideo.paused) {
+          secondaryVideo.play().catch(() => {});
+        }
+      } else {
+        // Case B: Primary time is beyond Secondary duration (Secondary should be done)
+        if (!isSecondaryFinished) {
+          secondaryVideo.pause();
+          // Reset currentTime to 0 to show the poster frame and look 'blank'
+          secondaryVideo.currentTime = 0; 
+          setIsSecondaryFinished(true); // Show the [WAITING...] overlay
+          console.log('Secondary video finished, waiting for primary loop.');
         }
       }
 
-      // PLAYBACK SYNC
-      if (video.paused && !secondaryVideo.paused) {
-        secondaryVideo.pause();
-      } else if (!video.paused && secondaryVideo.paused) {
-        secondaryVideo.play().catch(() => {});
-      }
-
-      // PRIMARY VIDEO STATE LOGIC
+      // PRIMARY VIDEO LOOP LOGIC (The cycle reset)
       if (primaryTime >= VIDEO_DURATION - 0.1) {
+        // Reset time for loop
         video.currentTime = 0;
 
+        // Ensure play is called to restart everything correctly
         video.play().catch(() => {});
         secondaryVideo.play().catch(() => {});
-        setIsSecondaryFinished(false);
-        console.log('Primary video looped, restarting both videos');
-
-      }
-
-      // Sync secondary video
-      if (secondaryVideo && !secondaryVideo.paused) {
-        const secondaryExpectedTime = video.currentTime % SECONDARY_VIDEO_DURATION;
-        // Only resync if drift is significant
-        if (Math.abs(secondaryVideo.currentTime - secondaryExpectedTime) > 0.5) {
-          secondaryVideo.currentTime = secondaryExpectedTime;
-        }
+        
+        // New cycle started, hide "Waiting" message
+        setIsSecondaryFinished(false); 
+        console.log('Primary video looped, restarting both videos.');
       }
     };
+    // --- END OF CONSOLIDATED TIME SYNC LOGIC ---
 
     const handleProgress = () => {
       if (video.buffered.length > 0) {
@@ -276,7 +261,7 @@ const PhainonShrine = () => {
         cancelAnimationFrame(animationRef.current);
       }
     };
-  }, []);
+  }, [currentVideoPosition, VIDEO_DURATION, SECONDARY_VIDEO_DURATION, isSecondaryFinished, isPlaying]); // Added dependencies for the effect to work correctly
 
   // Sync and setup for Secondary Video
   useEffect(() => {
@@ -289,37 +274,43 @@ const PhainonShrine = () => {
     secondaryVideo.muted = isSecondaryMuted;
     secondaryVideo.volume = secondaryVolume / 100;
 
-    const handleLoadedData = () => {
-      // Sync secondary video position to primary when it loads
-      secondaryVideo.currentTime = primaryVideo.currentTime % SECONDARY_VIDEO_DURATION;
+    // --- INITIAL SYNC ON LOAD (Fixes the refresh issue) ---
+    const initialSync = () => {
+        const targetTime = primaryVideo.currentTime % SECONDARY_VIDEO_DURATION;
+        secondaryVideo.currentTime = targetTime;
+        
+        // Apply the waiting logic on load if primary video is already past the secondary's duration
+        if (primaryVideo.currentTime >= SECONDARY_VIDEO_DURATION) {
+            setIsSecondaryFinished(true);
+            secondaryVideo.pause();
+        }
     };
-
-    const handlePlay = () => {
-      // Keep secondary video playing if primary is playing
-      if (primaryVideo && !primaryVideo.paused) {
-        secondaryVideo.play().catch(() => {});
-      }
-    };
-
+    
+    // Attempt sync right away if videos are ready (for fast refresh)
+    if (primaryVideo.readyState >= 1 && secondaryVideo.readyState >= 1) {
+        initialSync();
+    }
+    
+    // Use the loadeddata listener to catch when it's ready (for slow network/first load)
+    secondaryVideo.addEventListener('loadeddata', initialSync);
+    
     const handleVolumeChange = () => {
       // Update local state if volume is changed externally (e.g. browser control)
       setIsSecondaryMuted(secondaryVideo.muted);
       setSecondaryVolume(Math.round(secondaryVideo.volume * 100));
     };
 
-    secondaryVideo.addEventListener('loadeddata', handleLoadedData);
-    secondaryVideo.addEventListener('play', handlePlay);
     secondaryVideo.addEventListener('volumechange', handleVolumeChange);
 
-    // Initial play attempt (for mobile/autoplay)
+    // Initial play attempt (for mobile/autoplay, will be overridden by timeupdate sync)
     secondaryVideo.play().catch(() => {});
 
     return () => {
-      secondaryVideo.removeEventListener('loadeddata', handleLoadedData);
-      secondaryVideo.removeEventListener('play', handlePlay);
+      secondaryVideo.removeEventListener('loadeddata', initialSync);
       secondaryVideo.removeEventListener('volumechange', handleVolumeChange);
     };
-  }, [isSecondaryMuted, secondaryVolume]);
+  }, [isSecondaryMuted, secondaryVolume, SECONDARY_VIDEO_DURATION]);
+
 
   // Update primary video volume controls
   useEffect(() => {
@@ -362,7 +353,7 @@ const PhainonShrine = () => {
     };
   }, [isPlaying]);
 
-  // Sync video position every 10 seconds
+  // Sync video position every 10 seconds (time drift correction)
   useEffect(() => {
     const syncInterval = setInterval(() => {
       const video = videoRef.current;
@@ -384,14 +375,6 @@ const PhainonShrine = () => {
 
     return () => clearInterval(syncInterval);
   }, [videoLoaded]);
-
-  // Handle manual play (for autoplay restrictions) -- not used currently
-  const handlePlayClick = () => {
-    const video = videoRef.current;
-    if (video) {
-      video.play();
-    }
-  };
 
   // Handle user click to enable autoplay
   const handleInteraction = () => {
@@ -525,7 +508,6 @@ const PhainonShrine = () => {
             <video
               ref={videoRef}
               className="w-full h-full"
-              loop
               playsInline
               preload="auto"
               onContextMenu={(e) => e.preventDefault()}
@@ -542,10 +524,10 @@ const PhainonShrine = () => {
 
               {isSecondaryFinished && (
                 <div className="absolute inset-0 bg-black/80 flex items-center justify-center z-10">
-                        <span className="text-sm md:text-xl text-yellow-400 animate-pulse">
-                            [WAITING FOR CYCLE TO END]
-                        </span>
-                    </div>
+                    <span className="text-sm md:text-xl text-yellow-400 animate-pulse">
+                        [WAITING FOR CYCLE TO END]
+                    </span>
+                </div>
               )}
 
             <video
@@ -667,7 +649,7 @@ const PhainonShrine = () => {
         </div>
 
         {/* Grid of 100 Instances */}
-        <div className="border border-green-400/30 p-4">
+        <div className="border border-green-400/30 p-4" data-grid-container>
           <div className="text-xs text-green-400/60 mb-3">PARALLEL_INSTANCES [100x] - LIVE FEED</div>
           <div className="grid grid-cols-5 sm:grid-cols-10 gap-1">
             {Array.from({ length: GRID_SIZE }).map((_, i) => (
