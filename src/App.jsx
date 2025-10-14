@@ -219,7 +219,7 @@ const PhainonShrine = () => {
         cancelAnimationFrame(animationRef.current);
       }
     };
-  }, [currentVideoPosition]);
+  }, []);
 
   // Sync and setup for Secondary Video
   useEffect(() => {
@@ -339,8 +339,16 @@ useEffect(() => {
   // Handle user click to enable autoplay
   const handleInteraction = () => {
     const video = videoRef.current;
+    const secondaryVideo = secondaryVideoRef.current;
+
     if (video && video.paused) {
-      video.play();
+      video.play().then(() => {
+        setIsPlaying(true);
+      }).catch(() => {});
+    }
+
+    if (secondaryVideo && secondaryVideo.paused) {
+      secondaryVideo.play().catch(() => {});
     }
   };
 
