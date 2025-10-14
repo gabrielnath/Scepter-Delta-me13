@@ -18,7 +18,7 @@ const PhainonShrine = () => {
   const [isMuted, setIsMuted] = useState(true);
   const [volume, setVolume] = useState(100);
   const [isSecondaryMuted, setIsSecondaryMuted] = useState(true);
-  const [secondaryVolume, setSecondaryVolume] = useState(100)
+  const [secondaryVolume, setSecondaryVolume] = useState(100)
 
   // Fetching spinner
   const [spinnerIndex, setSpinnerIndex] = useState(0);
@@ -30,6 +30,7 @@ const PhainonShrine = () => {
   const intervalRef = useRef(null);
   const animationRef = useRef(null);
   const observerRef = useRef(null);
+  const offscreenCanvasRef = useRef(null);
 
   // const spinnerFrames = ['/', '-', '\\', '|'];
   const spinnerFrames = ['⠋', '⠙', '⠹', '⠸', '⠼', '⠴', '⠦', '⠧', '⠇', '⠏'];
@@ -80,12 +81,22 @@ const PhainonShrine = () => {
   // Took some effort to optimize, but it now works very reliably...phew.
   const drawVideoFrames = () => {
     const video = videoRef.current;
+    const offscreenCanvas = offscreenCanvasRef.current;
     
-    // Check if we can draw
-    if (!video || video.paused || video.ended || video.readyState < 3) {
+    // Check if we can draw & check offscreen canvas
+    if (!video || video.paused || video.ended || video.readyState < 3 || !offscreenCanvas) {
       animationRef.current = requestAnimationFrame(drawVideoFrames);
       return;
     }
+
+    const offCtx = offscreenCanvas.getContext('2d');
+
+    // Draw the video frame to offscreen canvas
+    offCtx.drawImage(video, 0, 0, offscreenCanvas.width, offscreenCanvas.height);
+
+    // Add green tint
+    offCtx.fillStyle = 'rgba(34, 197, 94, 0.1)';
+    offCtx.fillRect(0, 0, offscreenCanvas.width, offscreenCanvas.height);
 
     // Draw to all canvases
     canvasRefs.current.forEach((canvas, index) => {
@@ -93,12 +104,16 @@ const PhainonShrine = () => {
       
       const ctx = canvas.getContext('2d');
       
+      // OLD CODE:
       // Draw the video frame
-      ctx.drawImage(video, 0, 0, canvas.width, canvas.height);
-      
+      // ctx.drawImage(video, 0, 0, canvas.width, canvas.height);
+
       // Add green tint
-      ctx.fillStyle = 'rgba(34, 197, 94, 0.1)';
-      ctx.fillRect(0, 0, canvas.width, canvas.height);
+      // ctx.fillStyle = 'rgba(34, 197, 94, 0.1)';
+      // ctx.fillRect(0, 0, canvas.width, canvas.height);
+
+      // NEW CODE: draw from offscreen canvas (fast copy to all canvases)
+      ctx.drawImage(offscreenCanvas, 0, 0, canvas.width, canvas.height);
       
       // Add instance ID
       ctx.fillStyle = 'rgba(0, 0, 0, 0.8)';
@@ -223,55 +238,55 @@ const PhainonShrine = () => {
 
   // Sync and setup for Secondary Video
   useEffect(() => {
-  const primaryVideo = videoRef.current;
-  const secondaryVideo = secondaryVideoRef.current;
+    const primaryVideo = videoRef.current;
+    const secondaryVideo = secondaryVideoRef.current;
 
-  if (!primaryVideo || !secondaryVideo) return;
+    if (!primaryVideo || !secondaryVideo) return;
 
-  // Initial setup for secondary video
-  secondaryVideo.muted = isSecondaryMuted;
-  secondaryVideo.volume = secondaryVolume / 100;
+    // Initial setup for secondary video
+    secondaryVideo.muted = isSecondaryMuted;
+    secondaryVideo.volume = secondaryVolume / 100;
 
-  const handleLoadedData = () => {
-    // Sync secondary video position to primary when it loads
-    secondaryVideo.currentTime = primaryVideo.currentTime % SECONDARY_VIDEO_DURATION;
-  };
+    const handleLoadedData = () => {
+      // Sync secondary video position to primary when it loads
+      secondaryVideo.currentTime = primaryVideo.currentTime % SECONDARY_VIDEO_DURATION;
+    };
 
-  const handlePlay = () => {
-    // Keep secondary video playing if primary is playing
-    if (primaryVideo && !primaryVideo.paused) {
-      secondaryVideo.play().catch(() => {});
+    const handlePlay = () => {
+      // Keep secondary video playing if primary is playing
+      if (primaryVideo && !primaryVideo.paused) {
+        secondaryVideo.play().catch(() => {});
+      }
+    };
+
+    const handleVolumeChange = () => {
+      // Update local state if volume is changed externally (e.g. browser control)
+      setIsSecondaryMuted(secondaryVideo.muted);
+      setSecondaryVolume(Math.round(secondaryVideo.volume * 100));
+    };
+
+    secondaryVideo.addEventListener('loadeddata', handleLoadedData);
+    secondaryVideo.addEventListener('play', handlePlay);
+    secondaryVideo.addEventListener('volumechange', handleVolumeChange);
+
+    // Initial play attempt (for mobile/autoplay)
+    secondaryVideo.play().catch(() => {});
+
+    return () => {
+      secondaryVideo.removeEventListener('loadeddata', handleLoadedData);
+      secondaryVideo.removeEventListener('play', handlePlay);
+      secondaryVideo.removeEventListener('volumechange', handleVolumeChange);
+    };
+  }, [isSecondaryMuted, secondaryVolume]);
+
+  // Update primary video volume controls
+  useEffect(() => {
+    const video = videoRef.current;
+    if (video) {
+      video.volume = volume / 100;
+      video.muted = isMuted;
     }
-  };
-
-  const handleVolumeChange = () => {
-    // Update local state if volume is changed externally (e.g. browser control)
-    setIsSecondaryMuted(secondaryVideo.muted);
-    setSecondaryVolume(Math.round(secondaryVideo.volume * 100));
-  };
-
-  secondaryVideo.addEventListener('loadeddata', handleLoadedData);
-  secondaryVideo.addEventListener('play', handlePlay);
-  secondaryVideo.addEventListener('volumechange', handleVolumeChange);
-
-  // Initial play attempt (for mobile/autoplay)
-  secondaryVideo.play().catch(() => {});
-
-  return () => {
-    secondaryVideo.removeEventListener('loadeddata', handleLoadedData);
-    secondaryVideo.removeEventListener('play', handlePlay);
-    secondaryVideo.removeEventListener('volumechange', handleVolumeChange);
-  };
-}, [isSecondaryMuted, secondaryVolume]);
-
-// Update primary video volume controls
-useEffect(() => {
-  const video = videoRef.current;
-  if (video) {
-    video.volume = volume / 100;
-    video.muted = isMuted;
-  }
-}, [volume, isMuted]); // New useEffect to separate primary video volume logic
+  }, [volume, isMuted]);
 
   // Intersection Observer to pause canvas drawing when not visible
   useEffect(() => {
@@ -351,6 +366,21 @@ useEffect(() => {
       secondaryVideo.play().catch(() => {});
     }
   };
+
+  // Offscreen Canvas Initialization
+  useEffect(() => {
+      const offscreenCanvas = document.createElement('canvas');
+      offscreenCanvas.width = canvasSize;
+      offscreenCanvas.height = canvasSize;
+      offscreenCanvasRef.current = offscreenCanvas;
+      
+      console.log(`Offscreen canvas initialized at size: ${canvasSize}x${canvasSize}`);
+
+      // Cleanup
+      return () => {
+          offscreenCanvasRef.current = null;
+      };
+  }, [canvasSize]);
 
   return (
     <div className="min-h-screen bg-black text-green-400 font-mono p-4 md:p-8" onClick={handleInteraction}>
