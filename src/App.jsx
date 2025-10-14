@@ -13,6 +13,7 @@ const PhainonShrine = () => {
   const [videoLoaded, setVideoLoaded] = useState(false);
   const [videoFullyLoaded, setVideoFullyLoaded] = useState(false);
   const [loadProgress, setLoadProgress] = useState(0);
+  const [isSecondaryFinished, setIsSecondaryFinished] = useState(false);
 
   // Audio states
   const [isMuted, setIsMuted] = useState(true);
@@ -164,25 +165,39 @@ const PhainonShrine = () => {
 
     // Handler for when the primary video loops
     const handleTimeUpdate = () => {
-    const secondaryVideo = secondaryVideoRef.current;
-    // Check if the primary video is near its end
-    if (video.currentTime >= VIDEO_DURATION - 0.1) {
-      // Reset secondary video to loop with primary
-      if (secondaryVideo) {
-        secondaryVideo.currentTime = 0;
-        secondaryVideo.play().catch(() => {});
-      }
-    }
+      const video = videoRef.current;
+      const secondaryVideo = secondaryVideoRef.current;
 
-    // Sync secondary video
-    if (secondaryVideo && !secondaryVideo.paused) {
-      const secondaryExpectedTime = video.currentTime % SECONDARY_VIDEO_DURATION;
-      // Only resync if drift is significant
-      if (Math.abs(secondaryVideo.currentTime - secondaryExpectedTime) > 0.5) {
-        secondaryVideo.currentTime = secondaryExpectedTime;
+      // Secondary video END condition
+      if (secondaryVideo && !isSecondaryVideo.paused) {
+        if (secondaryVideo.currentTime >= SECONDARY_VIDEO_DURATION - 0.1) {
+          secondaryVideo.pause();
+          secondaryVideo.currentTime = 0;
+          setIsSecondaryFinished(true);
+          console.log('Secondary video finished, waiting for primary loop');
+        }
       }
-    }
-  };
+
+      // Primary video LOOP condition
+      if (video.currentTime >= VIDEO_DURATION - 0.1) {
+        // Reset secondary video to loop with primary
+        if (secondaryVideo) {
+          secondaryVideo.currentTime = 0;
+          secondaryVideo.play().catch(() => {});
+          setIsSecondaryFinished(false);
+          console.log('Primary video looped, restarting secondary video');
+        }
+      }
+
+      // Sync secondary video
+      if (secondaryVideo && !secondaryVideo.paused) {
+        const secondaryExpectedTime = video.currentTime % SECONDARY_VIDEO_DURATION;
+        // Only resync if drift is significant
+        if (Math.abs(secondaryVideo.currentTime - secondaryExpectedTime) > 0.5) {
+          secondaryVideo.currentTime = secondaryExpectedTime;
+        }
+      }
+    };
 
     const handleProgress = () => {
       if (video.buffered.length > 0) {
@@ -495,8 +510,17 @@ const PhainonShrine = () => {
 
         {/* Video Player - Secondary (Friend) */}
         <div className="border border-green-400/30 p-4 mb-4 md:mb-6">
-          <div className="text-xs text-green-400/60 mb-2">SECONDARY_STREAM [COMPANION]</div>
+          <div className="text-xs text-green-400/60 mb-2">SECONDARY_STREAM</div>
           <div className="aspect-video bg-black border border-green-400/20 relative">
+
+              {isSecondaryFinished && (
+                <div className="absolute inset-0 bg-black/80 flex items-center justify-center z-10">
+                        <span className="text-sm md:text-xl text-yellow-400 animate-pulse">
+                            [WAITING FOR CYCLE TO END]
+                        </span>
+                    </div>
+              )}
+
             <video
               ref={secondaryVideoRef}
               className="w-full h-full"
@@ -508,7 +532,7 @@ const PhainonShrine = () => {
             </video>
           </div>
           <div className="text-xs text-green-400/40 mt-2">
-            ⚠ Synced to primary stream | Resets when primary loops
+            ⚠ Synced to primary stream
           </div>
         </div>
 
