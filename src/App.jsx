@@ -168,25 +168,52 @@ const PhainonShrine = () => {
       const video = videoRef.current;
       const secondaryVideo = secondaryVideoRef.current;
 
-      // Secondary video END condition
-      if (secondaryVideo && !isSecondaryVideo.paused) {
-        if (secondaryVideo.currentTime >= SECONDARY_VIDEO_DURATION - 0.1) {
+      if (!video || !secondaryVideo) return;
+
+      const primaryTime = video.currentTime;
+
+      // SECONDARY VIDEO STATE LOGIC
+      if (primaryTime >= SECONDARY_VIDEO_DURATION) {
+        // Condition: The primary video's time is beyond the secondary video's duration
+        if (!isSecondaryFinished) {
           secondaryVideo.pause();
           secondaryVideo.currentTime = 0;
           setIsSecondaryFinished(true);
-          console.log('Secondary video finished, waiting for primary loop');
+          console.log('Secondary video finished, waiting for primary loop')
+        }
+      } else {
+        // Condition: The primary video's time is within the secondary video's duration
+        if (isSecondaryFinished) {
+          setIsSecondaryFinished(false); // Hide the [WAITING...] overlay
         }
       }
 
-      // Primary video LOOP condition
-      if (video.currentTime >= VIDEO_DURATION - 0.1) {
-        // Reset secondary video to loop with primary
-        if (secondaryVideo) {
-          secondaryVideo.currentTime = 0;
-          secondaryVideo.play().catch(() => {});
-          setIsSecondaryFinished(false);
-          console.log('Primary video looped, restarting secondary video');
+      // CONTINUOUS SYNCHRONIZATION
+      // Sync secondary video to primary's current time
+      if (secondaryVideo.readyState >= 3) {
+        const timeDifference = Math.abs(secondaryVideo.currentTime - primaryTime);
+
+        if (timeDifference > 0.2) {
+          secondaryVideo.currentTime = primaryTime;
         }
+      }
+
+      // PLAYBACK SYNC
+      if (video.paused && !secondaryVideo.paused) {
+        secondaryVideo.pause();
+      } else if (!video.paused && secondaryVideo.paused) {
+        secondaryVideo.play().catch(() => {});
+      }
+
+      // PRIMARY VIDEO STATE LOGIC
+      if (primaryTime >= VIDEO_DURATION - 0.1) {
+        video.currentTime = 0;
+
+        video.play().catch(() => {});
+        secondaryVideo.play().catch(() => {});
+        setIsSecondaryFinished(false);
+        console.log('Primary video looped, restarting both videos');
+
       }
 
       // Sync secondary video
@@ -523,7 +550,7 @@ const PhainonShrine = () => {
 
             <video
               ref={secondaryVideoRef}
-              className="w-full h-full"
+              className={`w-full h-full ${isSecondaryFinished ? 'opacity-20' : ''}`} 
               playsInline
               preload="auto"
               onContextMenu={(e) => e.preventDefault()}
