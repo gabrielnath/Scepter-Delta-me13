@@ -417,7 +417,7 @@ const PhainonShrine = () => {
           <div className="border border-green-400/30 p-4">
             <div className="text-green-400/60 text-xs mb-2">CYCLE_POSITION</div>
             <div className="text-xl">{formatVideoTime(currentVideoPosition)} / 4:47</div>
-            <div className="text-xs text-green-400/60 mt-1">LOOP_#{completedLoops.toLocaleString()}</div>
+            <div className="text-xs text-green-400/60 mt-1">LOOP_#{completedLoops.toLocaleString()} / COREFLAMES: {(totalCount*12).toLocaleString()}</div>
           </div>
         </div>
 
