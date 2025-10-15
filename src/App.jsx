@@ -150,13 +150,13 @@ const PhainonShrine = () => {
       
       // Simple initial setup
       if (video.currentTime === 0) {
-        video.muted = true;
-        video.volume = 1.0;
-        setIsMuted(true);
-        setVolume(100);
+        video.currentTime = currentVideoPosition;
       }
-      
-      // Auto-start playing
+      video.muted = true;
+      video.volume = 1.0;
+      setIsMuted(true);
+      setVolume(100);
+      // Auto-start playing (muted)
       video.play().then(() => {
         console.log('Autoplay successful');
         secondaryVideoRef.current?.play().catch(() => {});
