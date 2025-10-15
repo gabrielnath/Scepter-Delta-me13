@@ -36,6 +36,12 @@ const PhainonShrine = () => {
   const FPS_LIMIT = 30;
   const FRAME_INTERVAL = 1000 / FPS_LIMIT;
 
+  // User preference refs (to prevent auto-muting after user sets preference)
+  const userMutePreference = useRef(true);
+  const userVolumePreference = useRef(100);
+  const secondaryUserMutePreference = useRef(true);
+  const secondaryUserVolumePreference = useRef(100);
+
   const spinnerFrames = ['⠋', '⠙', '⠹', '⠸', '⠼', '⠴', '⠦', '⠧', '⠇', '⠏'];
 
   // Calculate elapsed time and stats
@@ -121,25 +127,20 @@ const PhainonShrine = () => {
     if (!video) return;
 
     const handleLoadedData = () => {
-      console.log('Primary video metadata loaded');
       setVideoLoaded(true);
     };
 
     const handleCanPlayThrough = () => {
-      console.log('Primary video fully loaded');
       setVideoFullyLoaded(true);
       if (video.currentTime === 0) {
         video.currentTime = currentVideoPosition;
-        video.muted = true;
-        video.volume = 1.0;
-        setIsMuted(true);
-        setVolume(100);
       }
-      video.play().then(() => {
-        console.log('Primary autoplay successful');
-      }).catch((e) => {
-        console.log('Primary autoplay failed:', e);
-      });
+      // Only set initial mute state, don't override user preferences
+      if (userMutePreference.current === true) {
+        video.muted = true;
+        video.volume = userVolumePreference.current / 100;
+      }
+      video.play().catch(() => {});
     };
 
     const handleProgress = () => {
@@ -154,7 +155,6 @@ const PhainonShrine = () => {
     };
 
     const handlePlay = () => {
-      console.log('Primary video playing');
       setIsPlaying(true);
       if (!animationRef.current) {
         drawVideoFrames();
@@ -162,12 +162,12 @@ const PhainonShrine = () => {
     };
 
     const handlePause = () => {
-      console.log('Primary video paused');
       setIsPlaying(false);
     };
 
     const handleVolumeChange = () => {
       setIsMuted(video.muted);
+      setVolume(Math.round(video.volume * 100));
     };
 
     video.addEventListener('loadeddata', handleLoadedData);
@@ -198,17 +198,16 @@ const PhainonShrine = () => {
     if (!video) return;
 
     const handleLoadedData = () => {
-      console.log('Secondary video metadata loaded');
       setSecondaryVideoLoaded(true);
     };
 
     const handleCanPlayThrough = () => {
-      console.log('Secondary video fully loaded');
       setSecondaryVideoFullyLoaded(true);
-      video.muted = true;
-      video.volume = 1.0;
-      setSecondaryIsMuted(true);
-      setSecondaryVolume(100);
+      // Only set initial mute state, don't override user preferences
+      if (secondaryUserMutePreference.current === true) {
+        video.muted = true;
+        video.volume = secondaryUserVolumePreference.current / 100;
+      }
     };
 
     const handleProgress = () => {
@@ -223,17 +222,16 @@ const PhainonShrine = () => {
     };
 
     const handlePlay = () => {
-      console.log('Secondary video playing');
       setSecondaryIsPlaying(true);
     };
 
     const handlePause = () => {
-      console.log('Secondary video paused');
       setSecondaryIsPlaying(false);
     };
 
     const handleVolumeChange = () => {
       setSecondaryIsMuted(video.muted);
+      setSecondaryVolume(Math.round(video.volume * 100));
     };
 
     video.addEventListener('loadeddata', handleLoadedData);
@@ -276,12 +274,15 @@ const PhainonShrine = () => {
     return () => clearInterval(syncInterval);
   }, [videoLoaded]);
 
-  // Sync secondary video position
+  // Sync secondary video position - Optimized to run less frequently
   useEffect(() => {
     const syncInterval = setInterval(() => {
       const video = secondaryVideoRef.current;
       if (video && secondaryVideoLoaded) {
-        if (isSecondaryWaiting) {
+        const currentCyclePosition = (Date.now() - START_TIME) / 1000 % VIDEO_DURATION;
+        const shouldWait = currentCyclePosition >= SECONDARY_VIDEO_DURATION;
+        
+        if (shouldWait) {
           // Pause and reset to start when waiting
           if (!video.paused) {
             video.pause();
@@ -291,9 +292,10 @@ const PhainonShrine = () => {
           }
         } else {
           // Play and sync when within duration
-          const expectedPosition = currentVideoPosition;
+          const expectedPosition = currentCyclePosition;
           const currentPos = video.currentTime;
           
+          // Only sync if drift is significant (more than 2 seconds)
           if (Math.abs(currentPos - expectedPosition) > 2) {
             video.currentTime = expectedPosition;
           }
@@ -303,10 +305,10 @@ const PhainonShrine = () => {
           }
         }
       }
-    }, 1000);
+    }, 5000); // Check every 5 seconds instead of 1 second
 
     return () => clearInterval(syncInterval);
-  }, [secondaryVideoLoaded, isSecondaryWaiting, currentVideoPosition]);
+  }, [secondaryVideoLoaded]);
 
   // Handle user click to enable autoplay
   const handleInteraction = () => {
@@ -454,8 +456,10 @@ const PhainonShrine = () => {
                 e.stopPropagation();
                 const video = videoRef.current;
                 if (video && videoFullyLoaded) {
-                  video.muted = !video.muted;
-                  setIsMuted(video.muted);
+                  const newMuteState = !video.muted;
+                  video.muted = newMuteState;
+                  userMutePreference.current = newMuteState; // Save user preference
+                  setIsMuted(newMuteState);
                 }
               }}
               disabled={!videoFullyLoaded}
@@ -468,15 +472,18 @@ const PhainonShrine = () => {
               <div 
                 className="flex-1 max-w-xs h-4 border border-green-400/30 bg-black relative cursor-pointer"
                 onClick={(e) => {
+                  e.stopPropagation();
                   if (!videoFullyLoaded) return;
                   const rect = e.currentTarget.getBoundingClientRect();
                   const percent = Math.round(((e.clientX - rect.left) / rect.width) * 100);
                   const video = videoRef.current;
-                  setVolume(percent);
                   if (video) {
                     video.volume = percent / 100;
+                    userVolumePreference.current = percent; // Save user preference
+                    setVolume(percent);
                     if (percent > 0 && video.muted) {
                       video.muted = false;
+                      userMutePreference.current = false; // Save user preference
                       setIsMuted(false);
                     }
                   }
@@ -505,7 +512,7 @@ const PhainonShrine = () => {
                     {spinnerFrames[spinnerIndex]} WAITING FOR CYCLE RESET
                   </div>
                   <div className="text-green-400/60 text-xs">
-                    Restarting at 0:00 ({formatVideoTime(VIDEO_DURATION - currentVideoPosition)} remaining)
+                    Restarting after NeiKos496 ({formatVideoTime(VIDEO_DURATION - currentVideoPosition)} remaining)
                   </div>
                 </div>
               </div>
@@ -535,8 +542,10 @@ const PhainonShrine = () => {
                 e.stopPropagation();
                 const video = secondaryVideoRef.current;
                 if (video && secondaryVideoFullyLoaded) {
-                  video.muted = !video.muted;
-                  setSecondaryIsMuted(video.muted);
+                  const newMuteState = !video.muted;
+                  video.muted = newMuteState;
+                  secondaryUserMutePreference.current = newMuteState; // Save user preference
+                  setSecondaryIsMuted(newMuteState);
                 }
               }}
               disabled={!secondaryVideoFullyLoaded}
@@ -549,15 +558,18 @@ const PhainonShrine = () => {
               <div 
                 className="flex-1 max-w-xs h-4 border border-green-400/30 bg-black relative cursor-pointer"
                 onClick={(e) => {
+                  e.stopPropagation();
                   if (!secondaryVideoFullyLoaded) return;
                   const rect = e.currentTarget.getBoundingClientRect();
                   const percent = Math.round(((e.clientX - rect.left) / rect.width) * 100);
                   const video = secondaryVideoRef.current;
-                  setSecondaryVolume(percent);
                   if (video) {
                     video.volume = percent / 100;
+                    secondaryUserVolumePreference.current = percent; // Save user preference
+                    setSecondaryVolume(percent);
                     if (percent > 0 && video.muted) {
                       video.muted = false;
+                      secondaryUserMutePreference.current = false; // Save user preference
                       setSecondaryIsMuted(false);
                     }
                   }
