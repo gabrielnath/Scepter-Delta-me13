@@ -4,7 +4,6 @@ const PhainonShrine = () => {
   // Hardcoded start: Oct 12, 2025, 11:30 PM GMT+7
   const START_TIME = new Date('2025-10-12T23:30:00+07:00').getTime();
   const VIDEO_DURATION = 287; // 4:47 in seconds
-  const SECONDARY_VIDEO_DURATION = 204; // 3:24 in seconds
   const GRID_SIZE = 100;
   const GOAL = 33550336;
   
@@ -13,32 +12,16 @@ const PhainonShrine = () => {
   const [videoLoaded, setVideoLoaded] = useState(false);
   const [videoFullyLoaded, setVideoFullyLoaded] = useState(false);
   const [loadProgress, setLoadProgress] = useState(0);
-  const [isSecondaryFinished, setIsSecondaryFinished] = useState(false);
-
-  // Audio states
   const [isMuted, setIsMuted] = useState(true);
   const [volume, setVolume] = useState(100);
-  const [isSecondaryMuted, setIsSecondaryMuted] = useState(true);
-  const [secondaryVolume, setSecondaryVolume] = useState(100)
-
-  // Fetching spinner
   const [spinnerIndex, setSpinnerIndex] = useState(0);
-
-  // Refs
   const videoRef = useRef(null);
-  const secondaryVideoRef = useRef(null);
   const canvasRefs = useRef([]);
   const intervalRef = useRef(null);
   const animationRef = useRef(null);
-  const observerRef = useRef(null);
-  const offscreenCanvasRef = useRef(null);
 
+  // const spinnerFrames = ['/', '-', '\\', '|'];
   const spinnerFrames = ['⠋', '⠙', '⠹', '⠸', '⠼', '⠴', '⠦', '⠧', '⠇', '⠏'];
-
-  // Detect if mobile device (for performance optimization)
-  const isMobile = /Android|webOS|iPhone|iPad|iPod|BlackBerry|IEMobile|Opera Mini/i.test(navigator.userAgent);
-  const canvasFPS = isMobile ? 20 : 60; // Lower FPS on mobile
-  const canvasSize = isMobile ? 80 : 160; // Smaller canvas on mobile
 
   // Calculate elapsed time and stats
   const elapsedSeconds = Math.max(0, Math.floor((currentTime - START_TIME) / 1000));
@@ -74,64 +57,42 @@ const PhainonShrine = () => {
     };
   }, []);
 
-  // Draw video to all 100 canvases - optimized version
+  // Draw video to all 100 canvases - simplified version
+  // Draws the video to all 100 canvases efficiently.
+  // Uses a single requestAnimationFrame for smooth 60fps updates.
+  // Checks if the video is ready before drawing to avoid desync and performance issues.
+  // Took some effort to optimize, but it now works very reliably...phew.
   const drawVideoFrames = () => {
     const video = videoRef.current;
-    const offscreenCanvas = offscreenCanvasRef.current;
     
-    if (!video || video.paused || video.ended || video.readyState < 3 || !offscreenCanvas) {
+    // Check if we can draw
+    if (!video || video.paused || video.ended || video.readyState < 3) {
       animationRef.current = requestAnimationFrame(drawVideoFrames);
       return;
     }
 
-    const offCtx = offscreenCanvas.getContext('2d', { alpha: false });
-
-    // Draw the video frame to offscreen canvas
-    offCtx.drawImage(video, 0, 0, offscreenCanvas.width, offscreenCanvas.height);
-
-    // Add green tint
-    offCtx.fillStyle = 'rgba(34, 197, 94, 0.1)';
-    offCtx.fillRect(0, 0, offscreenCanvas.width, offscreenCanvas.height);
-
-    // Batch canvas updates using requestIdleCallback for non-critical updates
-    const batchSize = isMobile ? 20 : 25; // Process fewer canvases per frame on mobile
-    let currentBatch = 0;
-    
-    const updateBatch = () => {
-      const start = currentBatch * batchSize;
-      const end = Math.min(start + batchSize, GRID_SIZE);
+    // Draw to all canvases
+    canvasRefs.current.forEach((canvas, index) => {
+      if (!canvas) return;
       
-      for (let i = start; i < end; i++) {
-        const canvas = canvasRefs.current[i];
-        if (!canvas) continue;
-        
-        const ctx = canvas.getContext('2d', { alpha: false });
-        ctx.drawImage(offscreenCanvas, 0, 0, canvas.width, canvas.height);
-        
-        // Add instance ID (less frequently on mobile)
-        if (!isMobile || i % 2 === 0) {
-          ctx.fillStyle = 'rgba(0, 0, 0, 0.8)';
-          ctx.fillRect(0, 0, 35, 15);
-          ctx.fillStyle = '#22c55e';
-          ctx.font = 'bold 11px monospace';
-          ctx.fillText(i.toString().padStart(3, '0'), 3, 12);
-        }
-      }
+      const ctx = canvas.getContext('2d');
       
-      currentBatch++;
-      if (currentBatch * batchSize < GRID_SIZE) {
-        // Continue with next batch in the same frame
-        updateBatch();
-      }
-    };
-    
-    updateBatch();
+      // Draw the video frame
+      ctx.drawImage(video, 0, 0, canvas.width, canvas.height);
+      
+      // Add green tint
+      ctx.fillStyle = 'rgba(34, 197, 94, 0.1)';
+      ctx.fillRect(0, 0, canvas.width, canvas.height);
+      
+      // Add instance ID
+      ctx.fillStyle = 'rgba(0, 0, 0, 0.8)';
+      ctx.fillRect(0, 0, 35, 15);
+      ctx.fillStyle = '#22c55e';
+      ctx.font = 'bold 11px monospace';
+      ctx.fillText(index.toString().padStart(3, '0'), 3, 12); // Instance ID
+    });
 
-    // Throttle frame rate
-    const delay = 1000 / canvasFPS;
-    setTimeout(() => {
-      animationRef.current = requestAnimationFrame(drawVideoFrames);
-    }, delay);
+    animationRef.current = requestAnimationFrame(drawVideoFrames);
   };
 
   // Setup video element
@@ -147,85 +108,21 @@ const PhainonShrine = () => {
     const handleCanPlayThrough = () => {
       console.log('Video fully loaded and can play through');
       setVideoFullyLoaded(true);
-      
-      // Simple initial setup
+      // Set initial position and muted state
       if (video.currentTime === 0) {
         video.currentTime = currentVideoPosition;
+        video.muted = true;
+        video.volume = 1.0;
+        setIsMuted(true);
+        setVolume(100);
       }
-      video.muted = true;
-      video.volume = 1.0;
-      setIsMuted(true);
-      setVolume(100);
       // Auto-start playing (muted)
       video.play().then(() => {
         console.log('Autoplay successful');
-        secondaryVideoRef.current?.play().catch(() => {});
       }).catch((e) => {
         console.log('Autoplay failed:', e);
       });
     };
-
-    // --- IMPROVED TIME SYNC LOGIC ---
-    const handleTimeUpdate = () => {
-      const video = videoRef.current;
-      const secondaryVideo = secondaryVideoRef.current;
-
-      if (!video || !secondaryVideo || video.readyState < 1 || secondaryVideo.readyState < 1) return;
-
-      const primaryTime = video.currentTime;
-      const secondaryShouldBePlaying = primaryTime < SECONDARY_VIDEO_DURATION;
-
-      // CONTINUOUS SYNCHRONIZATION (Master Sync)
-      if (secondaryVideo.readyState >= 3 && secondaryShouldBePlaying) {
-        const targetSecondaryTime = primaryTime % SECONDARY_VIDEO_DURATION; 
-        const timeDifference = Math.abs(secondaryVideo.currentTime - targetSecondaryTime);
-
-        // Only seek if difference is significant (reduces flickering)
-        if (timeDifference > 0.5) {
-          secondaryVideo.currentTime = targetSecondaryTime;
-        }
-      }
-
-      // SECONDARY VIDEO STATE & PLAYBACK LOGIC
-      if (secondaryShouldBePlaying) {
-        if (isSecondaryFinished) {
-          setIsSecondaryFinished(false);
-        }
-        
-        // Sync play/pause state
-        if (video.paused && !secondaryVideo.paused) {
-          secondaryVideo.pause();
-        } else if (!video.paused && secondaryVideo.paused) {
-          secondaryVideo.play().catch(() => {});
-        }
-      } else {
-        if (!isSecondaryFinished) {
-          secondaryVideo.pause();
-          secondaryVideo.currentTime = 0; 
-          setIsSecondaryFinished(true);
-        }
-      }
-    };
-
-    // Separate handler for primary video loop (using 'ended' event is more reliable)
-    const handleEnded = () => {
-      const video = videoRef.current;
-      const secondaryVideo = secondaryVideoRef.current;
-      
-      if (video && secondaryVideo) {
-        // Seamlessly loop without seeking flicker
-        video.currentTime = 0;
-        video.play().catch(() => {});
-        
-        // Restart secondary
-        secondaryVideo.currentTime = 0;
-        secondaryVideo.play().catch(() => {});
-        setIsSecondaryFinished(false);
-        
-        console.log('Primary video looped, restarting both videos.');
-      }
-    };
-    // --- END OF IMPROVED TIME SYNC LOGIC ---
 
     const handleProgress = () => {
       if (video.buffered.length > 0) {
@@ -261,8 +158,6 @@ const PhainonShrine = () => {
     video.addEventListener('play', handlePlay);
     video.addEventListener('pause', handlePause);
     video.addEventListener('volumechange', handleVolumeChange);
-    video.addEventListener('timeupdate', handleTimeUpdate);
-    video.addEventListener('ended', handleEnded);
 
     video.load();
 
@@ -273,165 +168,50 @@ const PhainonShrine = () => {
       video.removeEventListener('play', handlePlay);
       video.removeEventListener('pause', handlePause);
       video.removeEventListener('volumechange', handleVolumeChange);
-      video.removeEventListener('timeupdate', handleTimeUpdate);
-      video.removeEventListener('ended', handleEnded);
       if (animationRef.current) {
         cancelAnimationFrame(animationRef.current);
       }
     };
-  }, [currentVideoPosition, VIDEO_DURATION, SECONDARY_VIDEO_DURATION, isSecondaryFinished, isPlaying, START_TIME]);
-
-  // Sync and setup for Secondary Video (Simplified for initial sync and volume)
-  useEffect(() => {
-    const primaryVideo = videoRef.current;
-    const secondaryVideo = secondaryVideoRef.current;
-
-    if (!primaryVideo || !secondaryVideo) return;
-
-    // Initial setup for secondary video volume/mute state
-    secondaryVideo.muted = isSecondaryMuted;
-    secondaryVideo.volume = secondaryVolume / 100;
-
-    // --- INITIAL SYNC ON LOAD (Fixes the refresh issue) ---
-    const initialSync = () => {
-        const targetTime = primaryVideo.currentTime % SECONDARY_VIDEO_DURATION;
-        secondaryVideo.currentTime = targetTime;
-        
-        // Apply the waiting logic on load if primary video is already past the secondary's duration
-        if (primaryVideo.currentTime >= SECONDARY_VIDEO_DURATION) {
-            setIsSecondaryFinished(true);
-            secondaryVideo.pause();
-        }
-    };
-    
-    // Attempt sync right away if videos are ready (for fast refresh)
-    if (primaryVideo.readyState >= 1 && secondaryVideo.readyState >= 1) {
-        initialSync();
-    }
-    
-    // Use the loadeddata listener to catch when it's ready (for slow network/first load)
-    secondaryVideo.addEventListener('loadeddata', initialSync);
-    
-    const handleVolumeChange = () => {
-      // Update local state if volume is changed externally (e.g. browser control)
-      setIsSecondaryMuted(secondaryVideo.muted);
-      setSecondaryVolume(Math.round(secondaryVideo.volume * 100));
-    };
-
-    secondaryVideo.addEventListener('volumechange', handleVolumeChange);
-
-    // Initial play attempt (for mobile/autoplay, will be overridden by timeupdate sync)
-    secondaryVideo.play().catch(() => {});
-
-    return () => {
-      secondaryVideo.removeEventListener('loadeddata', initialSync);
-      secondaryVideo.removeEventListener('volumechange', handleVolumeChange);
-    };
-  }, [isSecondaryMuted, secondaryVolume, SECONDARY_VIDEO_DURATION]);
-
-  // Update primary video volume controls (prevent auto-mute bug)
-  useEffect(() => {
-    const video = videoRef.current;
-    if (video) {
-      // Update volume without triggering volumechange event cascade
-      const currentVolume = video.volume;
-      const targetVolume = volume / 100;
-      
-      if (Math.abs(currentVolume - targetVolume) > 0.01) {
-        video.volume = targetVolume;
-      }
-      
-      // Only update muted state if it's actually different
-      if (video.muted !== isMuted) {
-        video.muted = isMuted;
-      }
-    }
-  }, [volume, isMuted]);
-
-  // Intersection Observer to pause canvas drawing when not visible
-  useEffect(() => {
-    const gridContainer = document.querySelector('[data-grid-container]');
-    if (!gridContainer) return;
-
-    observerRef.current = new IntersectionObserver(
-      (entries) => {
-        entries.forEach((entry) => {
-          if (!entry.isIntersecting && animationRef.current) {
-            // Grid scrolled out of view - cancel animation
-            console.log('Grid out of view - pausing canvas drawing');
-            cancelAnimationFrame(animationRef.current);
-            animationRef.current = null;
-          } else if (entry.isIntersecting && !animationRef.current && isPlaying) {
-            // Grid back in view - resume animation
-            console.log('Grid in view - resuming canvas drawing');
-            drawVideoFrames();
-          }
-        });
-      },
-      { threshold: 0.1 } // Trigger when 10% visible
-    );
-
-    observerRef.current.observe(gridContainer);
-
-    return () => {
-      if (observerRef.current) {
-        observerRef.current.disconnect();
-      }
-    };
-  }, [isPlaying]);
+  }, []);
 
   // Sync video position every 10 seconds
   useEffect(() => {
-    const syncVideoToTime = () => {
+    const syncInterval = setInterval(() => {
       const video = videoRef.current;
-      if (video && videoLoaded && !video.paused) {
-        const expectedPosition = ((Date.now() - START_TIME) / 1000) % VIDEO_DURATION;
+      if (video && videoLoaded) {
+        const expectedPosition = (Date.now() - START_TIME) / 1000 % VIDEO_DURATION;
         const currentPos = video.currentTime;
         
         // If drift is more than 2 seconds, resync
         if (Math.abs(currentPos - expectedPosition) > 2) {
-          console.log(`Resyncing video: expected ${expectedPosition.toFixed(2)}s, actual ${currentPos.toFixed(2)}s`);
           video.currentTime = expectedPosition;
         }
+        
+        // Auto-restart if paused (to keep sync) -- in case autoplay was interrupted
+        if (video.paused) {
+          video.play().catch(() => {});
+        }
       }
-    };
-
-    // Sync periodically
-    const syncInterval = setInterval(syncVideoToTime, 10000);
+    }, 10000);
 
     return () => clearInterval(syncInterval);
-  }, [videoLoaded, START_TIME, VIDEO_DURATION]);
+  }, [videoLoaded]);
+
+  // Handle manual play (for autoplay restrictions) -- not used currently
+  const handlePlayClick = () => {
+    const video = videoRef.current;
+    if (video) {
+      video.play();
+    }
+  };
 
   // Handle user click to enable autoplay
   const handleInteraction = () => {
     const video = videoRef.current;
-    const secondaryVideo = secondaryVideoRef.current;
-
     if (video && video.paused) {
-      video.play().then(() => {
-        setIsPlaying(true);
-      }).catch(() => {});
-    }
-
-    if (secondaryVideo && secondaryVideo.paused) {
-      secondaryVideo.play().catch(() => {});
+      video.play();
     }
   };
-
-  // Offscreen Canvas Initialization
-  useEffect(() => {
-      const offscreenCanvas = document.createElement('canvas');
-      offscreenCanvas.width = canvasSize;
-      offscreenCanvas.height = canvasSize;
-      offscreenCanvasRef.current = offscreenCanvas;
-      
-      console.log(`Offscreen canvas initialized at size: ${canvasSize}x${canvasSize}`);
-
-      // Cleanup
-      return () => {
-          offscreenCanvasRef.current = null;
-      };
-  }, [canvasSize]);
 
   return (
     <div className="min-h-screen bg-black text-green-400 font-mono p-4 md:p-8" onClick={handleInteraction}>
@@ -527,13 +307,14 @@ const PhainonShrine = () => {
           </div>
         </div>
 
-        {/* Video Player - Primary (Phainon) */}
+        {/* Video Player */}
         <div className="border border-green-400/30 p-4 mb-4 md:mb-6">
           <div className="text-xs text-green-400/60 mb-2">PRIMARY_STREAM</div>
           <div className="aspect-video bg-black border border-green-400/20 relative">
             <video
               ref={videoRef}
               className="w-full h-full"
+              loop
               playsInline
               preload="auto"
               onContextMenu={(e) => e.preventDefault()}
@@ -543,43 +324,18 @@ const PhainonShrine = () => {
           </div>
         </div>
 
-        {/* Video Player - Secondary (Friend) */}
-        <div className="border border-green-400/30 p-4 mb-4 md:mb-6">
-          <div className="text-xs text-green-400/60 mb-2">SECONDARY_STREAM</div>
-          <div className="aspect-video bg-black border border-green-400/20 relative">
-
-              {isSecondaryFinished && (
-                <div className="absolute inset-0 bg-black/80 flex items-center justify-center z-10">
-                    <span className="text-sm md:text-xl text-green-400 animate-pulse">
-                        [WAITING FOR CYCLE TO END]
-                    </span>
-                </div>
-              )}
-
-            <video
-              ref={secondaryVideoRef}
-              className={`w-full h-full ${isSecondaryFinished ? 'opacity-20' : ''}`} 
-              playsInline
-              preload="auto"
-              onContextMenu={(e) => e.preventDefault()}
-            >
-              <source src="/companion.mp4" type="video/mp4" />
-            </video>
-          </div>
-          <div className="text-xs text-green-400/40 mt-2">
-            ⚠ Synced to primary stream
-          </div>
-        </div>
-
-        {/* Audio Controls - Primary Video */}
+        {/* Audio Controls - Separate Tab */}
         <div className="border border-green-400/30 p-3 mb-4 md:mb-6">
-          <div className="text-xs text-green-400/60 mb-2">AUDIO_CONTROLS [PRIMARY]</div>
           <div className="flex items-center gap-3 text-xs">
-            <span className="text-green-400/60">MUTE:</span>
+            <span className="text-green-400/60">AUDIO:</span>
             <button
               onClick={(e) => {
                 e.stopPropagation();
-                setIsMuted(prev => !prev);
+                const video = videoRef.current;
+                if (video && videoFullyLoaded) {
+                  video.muted = !video.muted;
+                  setIsMuted(video.muted);
+                }
               }}
               disabled={!videoFullyLoaded}
               className="text-green-400 hover:text-green-300 transition-colors border border-green-400/30 px-2 py-1 disabled:opacity-50 disabled:cursor-not-allowed"
@@ -594,13 +350,13 @@ const PhainonShrine = () => {
                   if (!videoFullyLoaded) return;
                   const rect = e.currentTarget.getBoundingClientRect();
                   const percent = Math.round(((e.clientX - rect.left) / rect.width) * 100);
-                  setVolume(percent);
                   const video = videoRef.current;
+                  setVolume(percent);
                   if (video) {
                     video.volume = percent / 100;
-                    if (percent > 0) {
-                    video.muted = false;
-                    setIsMuted(false);
+                    if (percent > 0 && video.muted) {
+                      video.muted = false;
+                      setIsMuted(false);
                     }
                   }
                 }}
@@ -610,7 +366,8 @@ const PhainonShrine = () => {
                   style={{ width: `${volume}%` }}
                 />
                 <div 
-                  className="absolute top-0 left-0 right-0 bottom-0 flex items-center justify-center text-[10px] text-green-400 font-bold pointer-events-none">
+                  className="absolute top-0 left-0 right-0 bottom-0 flex items-center justify-center text-[10px] text-green-400 font-bold pointer-events-none"
+                >
                   {volume}%
                 </div>
               </div>
@@ -618,56 +375,8 @@ const PhainonShrine = () => {
           </div>
         </div>
 
-        {/* Audio Controls - Secondary Video */}
-        <div className="border border-green-400/30 p-3 mb-4 md:mb-6">
-          <div className="text-xs text-green-400/60 mb-2">AUDIO_CONTROLS [SECONDARY]</div>
-          <div className="flex items-center gap-3 text-xs">
-            <span className="text-green-400/60">MUTE:</span>
-            <button
-              onClick={(e) => {
-                e.stopPropagation();
-                setIsSecondaryMuted(prev => !prev);
-              }}
-              disabled={!videoFullyLoaded}
-              className="text-green-400 hover:text-green-300 transition-colors border border-green-400/30 px-2 py-1 disabled:opacity-50 disabled:cursor-not-allowed"
-            >
-              {isSecondaryMuted ? '[MUTE]' : '[ON]'}
-            </button>
-            <div className="flex-1 flex items-center gap-2">
-              <span className="text-green-400/60">VOL:</span>
-              <div 
-                className="flex-1 max-w-xs h-4 border border-green-400/30 bg-black relative cursor-pointer"
-                onClick={(e) => {
-                  if (!videoFullyLoaded) return;
-                  const rect = e.currentTarget.getBoundingClientRect();
-                  const percent = Math.round(((e.clientX - rect.left) / rect.width) * 100);
-                  setSecondaryVolume(percent);
-                  const secondaryVideo = secondaryVideoRef.current;
-                  if (secondaryVideo) {
-                    secondaryVideo.volume = percent / 100;
-                    if (percent > 0) {
-                      secondaryVideo.muted = false;
-                      setIsSecondaryMuted(false);
-                    }
-                  }
-                }}
-              >
-                <div 
-                  className="h-full bg-green-400/50 transition-all duration-100"
-                  style={{ width: `${secondaryVolume}%` }}
-                />
-                <div 
-                  className="absolute top-0 left-0 right-0 bottom-0 flex items-center justify-center text-[10px] text-green-400 font-bold pointer-events-none"
-                >
-                  {secondaryVolume}%
-                </div>
-              </div>
-            </div>
-          </div>
-        </div>
-
         {/* Grid of 100 Instances */}
-        <div className="border border-green-400/30 p-4" data-grid-container>
+        <div className="border border-green-400/30 p-4">
           <div className="text-xs text-green-400/60 mb-3">PARALLEL_INSTANCES [100x] - LIVE FEED</div>
           <div className="grid grid-cols-5 sm:grid-cols-10 gap-1">
             {Array.from({ length: GRID_SIZE }).map((_, i) => (
@@ -677,8 +386,8 @@ const PhainonShrine = () => {
               >
                 <canvas
                   ref={el => canvasRefs.current[i] = el}
-                  width={canvasSize}
-                  height={canvasSize}
+                  width="160"
+                  height="160"
                   className="w-full h-full"
                 />
               </div>
