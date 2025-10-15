@@ -15,10 +15,16 @@ const PhainonShrine = () => {
   const [isMuted, setIsMuted] = useState(true);
   const [volume, setVolume] = useState(100);
   const [spinnerIndex, setSpinnerIndex] = useState(0);
+
+  // Canvas and video refs
   const videoRef = useRef(null);
   const canvasRefs = useRef([]);
   const intervalRef = useRef(null);
   const animationRef = useRef(null);
+  const contextCache = useRef({});
+  const lastFrameTime = useRef(0);
+  const FPS_LIMIT = 30;
+  const FRAME_INTERVAL = 1000 / FPS_LIMIT;
 
   // const spinnerFrames = ['/', '-', '\\', '|'];
   const spinnerFrames = ['⠋', '⠙', '⠹', '⠸', '⠼', '⠴', '⠦', '⠧', '⠇', '⠏'];
@@ -57,12 +63,13 @@ const PhainonShrine = () => {
     };
   }, []);
 
-  // Draw video to all 100 canvases - simplified version
-  // Draws the video to all 100 canvases efficiently.
-  // Uses a single requestAnimationFrame for smooth 60fps updates.
+  // Draw video to all 100 canvases - optimized version
+  // Batch canvas operations.
+  // Throttle to 30fps.
+  // Cache canvas contexts for performance.
   // Checks if the video is ready before drawing to avoid desync and performance issues.
   // Took some effort to optimize, but it now works very reliably...phew.
-  const drawVideoFrames = () => {
+  const drawVideoFrames = (timestamp) => {
     const video = videoRef.current;
     
     // Check if we can draw
@@ -71,11 +78,24 @@ const PhainonShrine = () => {
       return;
     }
 
-    // Draw to all canvases
+    // Throttle to 30fps
+    if (timestamp - lastFrameTime.current < FRAME_INTERVAL) {
+      animationRef.current = requestAnimationFrame(drawVideoFrames);
+      return;
+    }
+    lastFrameTime.current = timestamp;
+
+    // Draw to all canvases with caching
     canvasRefs.current.forEach((canvas, index) => {
       if (!canvas) return;
       
-      const ctx = canvas.getContext('2d');
+      if (!contextCache.current[index]) {
+        contextCache.current[index] = canvas.getContext('2d', {
+          alpha: false, // Disable alpha for performance
+          desynchronized: true, // Hint to reduce latency
+        });
+      }
+      const ctx = contextCache.current[index];
       
       // Draw the video frame
       ctx.drawImage(video, 0, 0, canvas.width, canvas.height);
