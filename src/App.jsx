@@ -148,13 +148,13 @@ const PhainonShrine = () => {
       console.log('Video fully loaded and can play through');
       setVideoFullyLoaded(true);
       
-      // Sync to correct position on load
-      const expectedPosition = ((Date.now() - START_TIME) / 1000) % VIDEO_DURATION;
-      video.currentTime = expectedPosition;
-      video.muted = true;
-      video.volume = 1.0;
-      setIsMuted(true);
-      setVolume(100);
+      // Simple initial setup
+      if (video.currentTime === 0) {
+        video.muted = true;
+        video.volume = 1.0;
+        setIsMuted(true);
+        setVolume(100);
+      }
       
       // Auto-start playing
       video.play().then(() => {
@@ -181,7 +181,7 @@ const PhainonShrine = () => {
         const timeDifference = Math.abs(secondaryVideo.currentTime - targetSecondaryTime);
 
         // Only seek if difference is significant (reduces flickering)
-        if (timeDifference > 0.3) {
+        if (timeDifference > 0.5) {
           secondaryVideo.currentTime = targetSecondaryTime;
         }
       }
@@ -380,7 +380,7 @@ const PhainonShrine = () => {
     };
   }, [isPlaying]);
 
-  // Sync video position every 5 seconds (more frequent sync) and on mount
+  // Sync video position every 10 seconds
   useEffect(() => {
     const syncVideoToTime = () => {
       const video = videoRef.current;
@@ -388,19 +388,16 @@ const PhainonShrine = () => {
         const expectedPosition = ((Date.now() - START_TIME) / 1000) % VIDEO_DURATION;
         const currentPos = video.currentTime;
         
-        // If drift is more than 1 second, resync
-        if (Math.abs(currentPos - expectedPosition) > 1) {
+        // If drift is more than 2 seconds, resync
+        if (Math.abs(currentPos - expectedPosition) > 2) {
           console.log(`Resyncing video: expected ${expectedPosition.toFixed(2)}s, actual ${currentPos.toFixed(2)}s`);
           video.currentTime = expectedPosition;
         }
       }
     };
 
-    // Sync immediately on load
-    syncVideoToTime();
-
     // Sync periodically
-    const syncInterval = setInterval(syncVideoToTime, 5000);
+    const syncInterval = setInterval(syncVideoToTime, 10000);
 
     return () => clearInterval(syncInterval);
   }, [videoLoaded, START_TIME, VIDEO_DURATION]);
@@ -553,7 +550,7 @@ const PhainonShrine = () => {
 
               {isSecondaryFinished && (
                 <div className="absolute inset-0 bg-black/80 flex items-center justify-center z-10">
-                    <span className="text-sm md:text-xl text-yellow-400 animate-pulse">
+                    <span className="text-sm md:text-xl text-green-400 animate-pulse">
                         [WAITING FOR CYCLE TO END]
                     </span>
                 </div>
@@ -582,11 +579,7 @@ const PhainonShrine = () => {
             <button
               onClick={(e) => {
                 e.stopPropagation();
-                setIsMuted(prev => {
-                  const newMuted = !prev;
-                  videoRef.current.muted = newMuted;
-                  return newMuted;
-                });
+                setIsMuted(prev => !prev);
               }}
               disabled={!videoFullyLoaded}
               className="text-green-400 hover:text-green-300 transition-colors border border-green-400/30 px-2 py-1 disabled:opacity-50 disabled:cursor-not-allowed"
@@ -633,11 +626,7 @@ const PhainonShrine = () => {
             <button
               onClick={(e) => {
                 e.stopPropagation();
-                setIsSecondaryMuted(prev => {
-                  const newMuted = !prev;
-                  secondaryVideoRef.current.muted = newMuted;
-                  return newMuted;
-                });
+                setIsSecondaryMuted(prev => !prev);
               }}
               disabled={!videoFullyLoaded}
               className="text-green-400 hover:text-green-300 transition-colors border border-green-400/30 px-2 py-1 disabled:opacity-50 disabled:cursor-not-allowed"
