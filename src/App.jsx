@@ -517,7 +517,7 @@ const PhainonShrine = () => {
               preload="auto"
               onContextMenu={(e) => e.preventDefault()}
             >
-              <source src="/secondary-phainon.mp4" type="video/mp4" />
+              <source src="/companion.mp4" type="video/mp4" />
             </video>
           </div>
           <div className="text-xs text-green-400/60 mt-2">
