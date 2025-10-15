@@ -112,7 +112,7 @@ const PhainonShrine = () => {
     }
     lastFrameTime.current = timestamp;
 
-    // Step 1: Draw video to offscreen canvas ONCE (instead of 100 times)
+    // Draw video to offscreen canvas ONCE (instead of 100 times)
     const offCtx = offscreenCtx.current;
     const offCanvas = offscreenCanvas.current;
     if (offCtx && offCanvas) {
@@ -121,7 +121,7 @@ const PhainonShrine = () => {
       offCtx.fillRect(0, 0, offCanvas.width, offCanvas.height);
     }
 
-    // Step 2: Copy from offscreen canvas to all visible canvases (much faster)
+    // Copy from offscreen canvas to all visible canvases (much faster)
     canvasRefs.current.forEach((canvas, index) => {
       if (!canvas) return;
       
@@ -331,7 +331,7 @@ const PhainonShrine = () => {
           }
         }
       }
-    }, 5000); // Check every 5 seconds instead of 1 second
+    }, 5000); // Check every 5 seconds
 
     return () => clearInterval(syncInterval);
   }, [secondaryVideoLoaded]);
@@ -454,6 +454,13 @@ const PhainonShrine = () => {
               Honkai: Star Rail - Animated Short "Hark! There's Revelry Atop the Divine Mountain"
             </a>
           </div>
+          <div className="text-xs text-green-400/60 flex items-center gap-2">
+            <span className="inline-block w-3 font-[ui-monospace,monospace] tracking-tight">{spinnerFrames[spinnerIndex]}</span>
+            <span>FETCHING DATA:</span>
+            <a href="https://www.youtube.com/watch?v=GaT1GftoqV0" target="_blank" rel="noopener noreferrer" className="text-green-400 hover:text-green-300 transition-colors underline truncate">
+              Honkai: Star Rail - Phainon Trailer — "Coronal Radiance"
+            </a>
+          </div>
         </div>
 
         {/* Primary Video Player */}
@@ -535,10 +542,10 @@ const PhainonShrine = () => {
               <div className="absolute inset-0 flex items-center justify-center bg-black/80 z-10">
                 <div className="text-center">
                   <div className="text-green-400 text-sm mb-2">
-                    {spinnerFrames[spinnerIndex]} WAITING FOR CYCLE RESET
+                    {spinnerFrames[spinnerIndex]} FUNCTION TERMINATED
                   </div>
                   <div className="text-green-400/60 text-xs">
-                    Restarting at 0:00 ({formatVideoTime(VIDEO_DURATION - currentVideoPosition)} remaining)
+                    Awaiting NeiKos496 completion... ({formatVideoTime(VIDEO_DURATION - currentVideoPosition)} until reboot)
                   </div>
                 </div>
               </div>
@@ -554,8 +561,8 @@ const PhainonShrine = () => {
             </video>
           </div>
           <div className="text-xs text-green-400/60 mt-2">
-            DURATION: 3:24 | POSITION: {formatVideoTime(secondaryVideoPosition)} | 
-            STATUS: {isSecondaryWaiting ? 'WAITING' : (secondaryIsPlaying ? 'PLAYING' : 'PAUSED')}
+            COREFLAMES: {(totalCount*12).toLocaleString()} | 
+            STATUS: {isSecondaryWaiting ? 'WAITING' : (secondaryIsPlaying ? 'RUNNING' : 'PAUSED')}
           </div>
         </div>
 
