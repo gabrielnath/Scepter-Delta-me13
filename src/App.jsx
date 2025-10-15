@@ -32,6 +32,8 @@ const PhainonShrine = () => {
   const intervalRef = useRef(null);
   const animationRef = useRef(null);
   const contextCache = useRef({});
+  const offscreenCanvas = useRef(null);
+  const offscreenCtx = useRef(null);
   const lastFrameTime = useRef(0);
   const FPS_LIMIT = 30;
   const FRAME_INTERVAL = 1000 / FPS_LIMIT;
@@ -82,7 +84,20 @@ const PhainonShrine = () => {
     };
   }, []);
 
-  // Draw video to all 100 canvases - optimized version
+  // Initialize offscreen canvas for buffering
+  useEffect(() => {
+    if (!offscreenCanvas.current) {
+      offscreenCanvas.current = document.createElement('canvas');
+      offscreenCanvas.current.width = 120;
+      offscreenCanvas.current.height = 120;
+      offscreenCtx.current = offscreenCanvas.current.getContext('2d', {
+        alpha: false,
+        desynchronized: true,
+      });
+    }
+  }, []);
+
+  // Draw video to all 100 canvases - ultra optimized with offscreen buffer
   const drawVideoFrames = (timestamp) => {
     const video = videoRef.current;
     
@@ -97,6 +112,16 @@ const PhainonShrine = () => {
     }
     lastFrameTime.current = timestamp;
 
+    // Step 1: Draw video to offscreen canvas ONCE (instead of 100 times)
+    const offCtx = offscreenCtx.current;
+    const offCanvas = offscreenCanvas.current;
+    if (offCtx && offCanvas) {
+      offCtx.drawImage(video, 0, 0, offCanvas.width, offCanvas.height);
+      offCtx.fillStyle = 'rgba(34, 197, 94, 0.1)';
+      offCtx.fillRect(0, 0, offCanvas.width, offCanvas.height);
+    }
+
+    // Step 2: Copy from offscreen canvas to all visible canvases (much faster)
     canvasRefs.current.forEach((canvas, index) => {
       if (!canvas) return;
       
@@ -108,9 +133,10 @@ const PhainonShrine = () => {
       }
       const ctx = contextCache.current[index];
       
-      ctx.drawImage(video, 0, 0, canvas.width, canvas.height);
-      ctx.fillStyle = 'rgba(34, 197, 94, 0.1)';
-      ctx.fillRect(0, 0, canvas.width, canvas.height);
+      // Copy the offscreen canvas (fast image-to-image copy)
+      ctx.drawImage(offCanvas, 0, 0);
+      
+      // Add unique instance ID
       ctx.fillStyle = 'rgba(0, 0, 0, 0.8)';
       ctx.fillRect(0, 0, 35, 15);
       ctx.fillStyle = '#22c55e';
@@ -512,7 +538,7 @@ const PhainonShrine = () => {
                     {spinnerFrames[spinnerIndex]} WAITING FOR CYCLE RESET
                   </div>
                   <div className="text-green-400/60 text-xs">
-                    Restarting after NeiKos496 ({formatVideoTime(VIDEO_DURATION - currentVideoPosition)} remaining)
+                    Restarting at 0:00 ({formatVideoTime(VIDEO_DURATION - currentVideoPosition)} remaining)
                   </div>
                 </div>
               </div>
