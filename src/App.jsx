@@ -4,6 +4,7 @@ const PhainonShrine = () => {
   // Hardcoded start: Oct 12, 2025, 11:30 PM GMT+7
   const START_TIME = new Date('2025-10-12T23:30:00+07:00').getTime();
   const VIDEO_DURATION = 287; // 4:47 in seconds
+  const SECONDARY_VIDEO_DURATION = 204; // 3:24 in seconds
   const GRID_SIZE = 100;
   const GOAL = 33550336;
   
@@ -16,8 +17,17 @@ const PhainonShrine = () => {
   const [volume, setVolume] = useState(100);
   const [spinnerIndex, setSpinnerIndex] = useState(0);
 
+  // Secondary video states
+  const [secondaryVideoLoaded, setSecondaryVideoLoaded] = useState(false);
+  const [secondaryVideoFullyLoaded, setSecondaryVideoFullyLoaded] = useState(false);
+  const [secondaryLoadProgress, setSecondaryLoadProgress] = useState(0);
+  const [secondaryIsPlaying, setSecondaryIsPlaying] = useState(false);
+  const [secondaryIsMuted, setSecondaryIsMuted] = useState(true);
+  const [secondaryVolume, setSecondaryVolume] = useState(100);
+
   // Canvas and video refs
   const videoRef = useRef(null);
+  const secondaryVideoRef = useRef(null);
   const canvasRefs = useRef([]);
   const intervalRef = useRef(null);
   const animationRef = useRef(null);
@@ -26,7 +36,6 @@ const PhainonShrine = () => {
   const FPS_LIMIT = 30;
   const FRAME_INTERVAL = 1000 / FPS_LIMIT;
 
-  // const spinnerFrames = ['/', '-', '\\', '|'];
   const spinnerFrames = ['⠋', '⠙', '⠹', '⠸', '⠼', '⠴', '⠦', '⠧', '⠇', '⠏'];
 
   // Calculate elapsed time and stats
@@ -35,6 +44,10 @@ const PhainonShrine = () => {
   const currentVideoPosition = elapsedSeconds % VIDEO_DURATION;
   const totalCount = completedLoops * GRID_SIZE;
   const progressPercent = ((totalCount / GOAL) * 100).toFixed(4);
+
+  // Calculate secondary video state
+  const isSecondaryWaiting = currentVideoPosition >= SECONDARY_VIDEO_DURATION;
+  const secondaryVideoPosition = isSecondaryWaiting ? 0 : currentVideoPosition;
 
   // Format time display
   const formatTime = (seconds) => {
@@ -51,7 +64,7 @@ const PhainonShrine = () => {
     return `${mins}:${secs.toString().padStart(2, '0')}`;
   };
 
-  // Update current time every 80 miliseconds
+  // Update current time every 80 milliseconds
   useEffect(() => {
     intervalRef.current = setInterval(() => {
       setCurrentTime(Date.now());
@@ -64,71 +77,57 @@ const PhainonShrine = () => {
   }, []);
 
   // Draw video to all 100 canvases - optimized version
-  // Batch canvas operations.
-  // Throttle to 30fps.
-  // Cache canvas contexts for performance.
-  // Checks if the video is ready before drawing to avoid desync and performance issues.
-  // Took some effort to optimize, but it now works very reliably...phew.
   const drawVideoFrames = (timestamp) => {
     const video = videoRef.current;
     
-    // Check if we can draw
     if (!video || video.paused || video.ended || video.readyState < 3) {
       animationRef.current = requestAnimationFrame(drawVideoFrames);
       return;
     }
 
-    // Throttle to 30fps
     if (timestamp - lastFrameTime.current < FRAME_INTERVAL) {
       animationRef.current = requestAnimationFrame(drawVideoFrames);
       return;
     }
     lastFrameTime.current = timestamp;
 
-    // Draw to all canvases with caching
     canvasRefs.current.forEach((canvas, index) => {
       if (!canvas) return;
       
       if (!contextCache.current[index]) {
         contextCache.current[index] = canvas.getContext('2d', {
-          alpha: false, // Disable alpha for performance
-          desynchronized: true, // Hint to reduce latency
+          alpha: false,
+          desynchronized: true,
         });
       }
       const ctx = contextCache.current[index];
       
-      // Draw the video frame
       ctx.drawImage(video, 0, 0, canvas.width, canvas.height);
-      
-      // Add green tint
       ctx.fillStyle = 'rgba(34, 197, 94, 0.1)';
       ctx.fillRect(0, 0, canvas.width, canvas.height);
-      
-      // Add instance ID
       ctx.fillStyle = 'rgba(0, 0, 0, 0.8)';
       ctx.fillRect(0, 0, 35, 15);
       ctx.fillStyle = '#22c55e';
       ctx.font = 'bold 11px monospace';
-      ctx.fillText(index.toString().padStart(3, '0'), 3, 12); // Instance ID
+      ctx.fillText(index.toString().padStart(3, '0'), 3, 12);
     });
 
     animationRef.current = requestAnimationFrame(drawVideoFrames);
   };
 
-  // Setup video element
+  // Setup primary video element
   useEffect(() => {
     const video = videoRef.current;
     if (!video) return;
 
     const handleLoadedData = () => {
-      console.log('Video metadata loaded');
+      console.log('Primary video metadata loaded');
       setVideoLoaded(true);
     };
 
     const handleCanPlayThrough = () => {
-      console.log('Video fully loaded and can play through');
+      console.log('Primary video fully loaded');
       setVideoFullyLoaded(true);
-      // Set initial position and muted state
       if (video.currentTime === 0) {
         video.currentTime = currentVideoPosition;
         video.muted = true;
@@ -136,11 +135,10 @@ const PhainonShrine = () => {
         setIsMuted(true);
         setVolume(100);
       }
-      // Auto-start playing (muted)
       video.play().then(() => {
-        console.log('Autoplay successful');
+        console.log('Primary autoplay successful');
       }).catch((e) => {
-        console.log('Autoplay failed:', e);
+        console.log('Primary autoplay failed:', e);
       });
     };
 
@@ -156,7 +154,7 @@ const PhainonShrine = () => {
     };
 
     const handlePlay = () => {
-      console.log('Video playing - starting canvas draw');
+      console.log('Primary video playing');
       setIsPlaying(true);
       if (!animationRef.current) {
         drawVideoFrames();
@@ -164,7 +162,7 @@ const PhainonShrine = () => {
     };
 
     const handlePause = () => {
-      console.log('Video paused');
+      console.log('Primary video paused');
       setIsPlaying(false);
     };
 
@@ -194,7 +192,70 @@ const PhainonShrine = () => {
     };
   }, []);
 
-  // Sync video position every 10 seconds
+  // Setup secondary video element
+  useEffect(() => {
+    const video = secondaryVideoRef.current;
+    if (!video) return;
+
+    const handleLoadedData = () => {
+      console.log('Secondary video metadata loaded');
+      setSecondaryVideoLoaded(true);
+    };
+
+    const handleCanPlayThrough = () => {
+      console.log('Secondary video fully loaded');
+      setSecondaryVideoFullyLoaded(true);
+      video.muted = true;
+      video.volume = 1.0;
+      setSecondaryIsMuted(true);
+      setSecondaryVolume(100);
+    };
+
+    const handleProgress = () => {
+      if (video.buffered.length > 0) {
+        const bufferedEnd = video.buffered.end(video.buffered.length - 1);
+        const duration = video.duration;
+        if (duration > 0) {
+          const percent = (bufferedEnd / duration) * 100;
+          setSecondaryLoadProgress(Math.round(percent));
+        }
+      }
+    };
+
+    const handlePlay = () => {
+      console.log('Secondary video playing');
+      setSecondaryIsPlaying(true);
+    };
+
+    const handlePause = () => {
+      console.log('Secondary video paused');
+      setSecondaryIsPlaying(false);
+    };
+
+    const handleVolumeChange = () => {
+      setSecondaryIsMuted(video.muted);
+    };
+
+    video.addEventListener('loadeddata', handleLoadedData);
+    video.addEventListener('canplaythrough', handleCanPlayThrough);
+    video.addEventListener('progress', handleProgress);
+    video.addEventListener('play', handlePlay);
+    video.addEventListener('pause', handlePause);
+    video.addEventListener('volumechange', handleVolumeChange);
+
+    video.load();
+
+    return () => {
+      video.removeEventListener('loadeddata', handleLoadedData);
+      video.removeEventListener('canplaythrough', handleCanPlayThrough);
+      video.removeEventListener('progress', handleProgress);
+      video.removeEventListener('play', handlePlay);
+      video.removeEventListener('pause', handlePause);
+      video.removeEventListener('volumechange', handleVolumeChange);
+    };
+  }, []);
+
+  // Sync primary video position
   useEffect(() => {
     const syncInterval = setInterval(() => {
       const video = videoRef.current;
@@ -202,12 +263,10 @@ const PhainonShrine = () => {
         const expectedPosition = (Date.now() - START_TIME) / 1000 % VIDEO_DURATION;
         const currentPos = video.currentTime;
         
-        // If drift is more than 2 seconds, resync
         if (Math.abs(currentPos - expectedPosition) > 2) {
           video.currentTime = expectedPosition;
         }
         
-        // Auto-restart if paused (to keep sync) -- in case autoplay was interrupted
         if (video.paused) {
           video.play().catch(() => {});
         }
@@ -217,19 +276,49 @@ const PhainonShrine = () => {
     return () => clearInterval(syncInterval);
   }, [videoLoaded]);
 
-  // Handle manual play (for autoplay restrictions) -- not used currently
-  const handlePlayClick = () => {
-    const video = videoRef.current;
-    if (video) {
-      video.play();
-    }
-  };
+  // Sync secondary video position
+  useEffect(() => {
+    const syncInterval = setInterval(() => {
+      const video = secondaryVideoRef.current;
+      if (video && secondaryVideoLoaded) {
+        if (isSecondaryWaiting) {
+          // Pause and reset to start when waiting
+          if (!video.paused) {
+            video.pause();
+          }
+          if (video.currentTime !== 0) {
+            video.currentTime = 0;
+          }
+        } else {
+          // Play and sync when within duration
+          const expectedPosition = currentVideoPosition;
+          const currentPos = video.currentTime;
+          
+          if (Math.abs(currentPos - expectedPosition) > 2) {
+            video.currentTime = expectedPosition;
+          }
+          
+          if (video.paused) {
+            video.play().catch(() => {});
+          }
+        }
+      }
+    }, 1000);
+
+    return () => clearInterval(syncInterval);
+  }, [secondaryVideoLoaded, isSecondaryWaiting, currentVideoPosition]);
 
   // Handle user click to enable autoplay
   const handleInteraction = () => {
     const video = videoRef.current;
+    const secondaryVideo = secondaryVideoRef.current;
+    
     if (video && video.paused) {
       video.play();
+    }
+    
+    if (secondaryVideo && secondaryVideo.paused && !isSecondaryWaiting) {
+      secondaryVideo.play();
     }
   };
 
@@ -245,13 +334,25 @@ const PhainonShrine = () => {
             </div>
             <div className="mb-4">
               <div className="flex justify-between text-xs mb-2">
-                <span>LOADING VIDEO DATA</span>
+                <span>LOADING PRIMARY VIDEO</span>
                 <span>{loadProgress}%</span>
               </div>
               <div className="w-full bg-green-400/10 h-4 border border-green-400/30">
                 <div 
                   className="h-full bg-green-400/50 transition-all duration-300"
                   style={{ width: `${loadProgress}%` }}
+                />
+              </div>
+            </div>
+            <div className="mb-4">
+              <div className="flex justify-between text-xs mb-2">
+                <span>LOADING SECONDARY VIDEO</span>
+                <span>{secondaryLoadProgress}%</span>
+              </div>
+              <div className="w-full bg-green-400/10 h-4 border border-green-400/30">
+                <div 
+                  className="h-full bg-green-400/50 transition-all duration-300"
+                  style={{ width: `${secondaryLoadProgress}%` }}
                 />
               </div>
             </div>
@@ -316,7 +417,7 @@ const PhainonShrine = () => {
           </div>
         </div>
 
-        {/* Fetching Status - Separate Tab */}
+        {/* Fetching Status */}
         <div className="border border-green-400/30 p-3 mb-4 md:mb-6">
           <div className="text-xs text-green-400/60 flex items-center gap-2">
             <span className="inline-block w-3 font-[ui-monospace,monospace] tracking-tight">{spinnerFrames[spinnerIndex]}</span>
@@ -327,7 +428,7 @@ const PhainonShrine = () => {
           </div>
         </div>
 
-        {/* Video Player */}
+        {/* Primary Video Player */}
         <div className="border border-green-400/30 p-4 mb-4 md:mb-6">
           <div className="text-xs text-green-400/60 mb-2">PRIMARY_STREAM</div>
           <div className="aspect-video bg-black border border-green-400/20 relative">
@@ -344,10 +445,10 @@ const PhainonShrine = () => {
           </div>
         </div>
 
-        {/* Audio Controls - Separate Tab */}
+        {/* Primary Audio Controls */}
         <div className="border border-green-400/30 p-3 mb-4 md:mb-6">
           <div className="flex items-center gap-3 text-xs">
-            <span className="text-green-400/60">AUDIO:</span>
+            <span className="text-green-400/60">PRIMARY AUDIO:</span>
             <button
               onClick={(e) => {
                 e.stopPropagation();
@@ -385,10 +486,89 @@ const PhainonShrine = () => {
                   className="h-full bg-green-400/50 transition-all duration-100"
                   style={{ width: `${volume}%` }}
                 />
-                <div 
-                  className="absolute top-0 left-0 right-0 bottom-0 flex items-center justify-center text-[10px] text-green-400 font-bold pointer-events-none"
-                >
+                <div className="absolute top-0 left-0 right-0 bottom-0 flex items-center justify-center text-[10px] text-green-400 font-bold pointer-events-none">
                   {volume}%
+                </div>
+              </div>
+            </div>
+          </div>
+        </div>
+
+        {/* Secondary Video Player */}
+        <div className="border border-green-400/30 p-4 mb-4 md:mb-6">
+          <div className="text-xs text-green-400/60 mb-2">SECONDARY_STREAM</div>
+          <div className="aspect-video bg-black border border-green-400/20 relative">
+            {isSecondaryWaiting && (
+              <div className="absolute inset-0 flex items-center justify-center bg-black/80 z-10">
+                <div className="text-center">
+                  <div className="text-green-400 text-sm mb-2">
+                    {spinnerFrames[spinnerIndex]} WAITING FOR CYCLE RESET
+                  </div>
+                  <div className="text-green-400/60 text-xs">
+                    Restarting at 0:00 ({formatVideoTime(VIDEO_DURATION - currentVideoPosition)} remaining)
+                  </div>
+                </div>
+              </div>
+            )}
+            <video
+              ref={secondaryVideoRef}
+              className="w-full h-full"
+              playsInline
+              preload="auto"
+              onContextMenu={(e) => e.preventDefault()}
+            >
+              <source src="/secondary-phainon.mp4" type="video/mp4" />
+            </video>
+          </div>
+          <div className="text-xs text-green-400/60 mt-2">
+            DURATION: 3:24 | POSITION: {formatVideoTime(secondaryVideoPosition)} | 
+            STATUS: {isSecondaryWaiting ? 'WAITING' : (secondaryIsPlaying ? 'PLAYING' : 'PAUSED')}
+          </div>
+        </div>
+
+        {/* Secondary Audio Controls */}
+        <div className="border border-green-400/30 p-3 mb-4 md:mb-6">
+          <div className="flex items-center gap-3 text-xs">
+            <span className="text-green-400/60">SECONDARY AUDIO:</span>
+            <button
+              onClick={(e) => {
+                e.stopPropagation();
+                const video = secondaryVideoRef.current;
+                if (video && secondaryVideoFullyLoaded) {
+                  video.muted = !video.muted;
+                  setSecondaryIsMuted(video.muted);
+                }
+              }}
+              disabled={!secondaryVideoFullyLoaded}
+              className="text-green-400 hover:text-green-300 transition-colors border border-green-400/30 px-2 py-1 disabled:opacity-50 disabled:cursor-not-allowed"
+            >
+              {secondaryIsMuted ? '[MUTE]' : '[ON]'}
+            </button>
+            <div className="flex-1 flex items-center gap-2">
+              <span className="text-green-400/60">VOL:</span>
+              <div 
+                className="flex-1 max-w-xs h-4 border border-green-400/30 bg-black relative cursor-pointer"
+                onClick={(e) => {
+                  if (!secondaryVideoFullyLoaded) return;
+                  const rect = e.currentTarget.getBoundingClientRect();
+                  const percent = Math.round(((e.clientX - rect.left) / rect.width) * 100);
+                  const video = secondaryVideoRef.current;
+                  setSecondaryVolume(percent);
+                  if (video) {
+                    video.volume = percent / 100;
+                    if (percent > 0 && video.muted) {
+                      video.muted = false;
+                      setSecondaryIsMuted(false);
+                    }
+                  }
+                }}
+              >
+                <div 
+                  className="h-full bg-green-400/50 transition-all duration-100"
+                  style={{ width: `${secondaryVolume}%` }}
+                />
+                <div className="absolute top-0 left-0 right-0 bottom-0 flex items-center justify-center text-[10px] text-green-400 font-bold pointer-events-none">
+                  {secondaryVolume}%
                 </div>
               </div>
             </div>
@@ -406,8 +586,8 @@ const PhainonShrine = () => {
               >
                 <canvas
                   ref={el => canvasRefs.current[i] = el}
-                  width="160"
-                  height="160"
+                  width="120"
+                  height="120"
                   className="w-full h-full"
                 />
               </div>
